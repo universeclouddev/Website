@@ -1,25 +1,76 @@
 ---
 import FilePane from '../FilePane.astro';
+
+const wrappers = [
+	{ node: 'node-1', id: 'a1b2c3', name: 'lobby', state: 'ONLINE', port: ':25565', delay: '0.80s' },
+	{ node: 'node-2', id: 'd4e5f6', name: 'survival', state: 'ONLINE', port: ':25566', delay: '0.95s' },
+	{ node: 'node-3', id: 'g7h8i9', name: 'build', state: 'STARTING', port: ':25567', delay: '1.10s' }
+];
+
+const tone = (state: string) =>
+	state === 'ONLINE' ? 'var(--color-syn-green)' : 'var(--color-syn-yellow)';
 ---
 
 <FilePane id="cluster" label="cluster.txt" dot="var(--color-syn-aqua)" meta="topology" lines={22}>
-	<div class="bg-surface-inset overflow-x-auto">
-		<pre class="font-mono text-[12.5px] leading-[1.55] text-fg-2 p-5 sm:p-7 min-w-max"><span class="syn-comment"># one master exposes the api &amp; holds state · N wrappers execute instances</span>
+	<div class="ct bg-surface-inset px-5 sm:px-8 py-7 sm:py-9">
+		<p class="font-mono text-[12px] leading-[1.6] syn-comment mb-8">
+			# one master exposes the api &amp; holds state · N wrappers execute instances
+		</p>
 
-            ┌─────────────────────────────┐
-            │  node-1  ·  <span class="text-accent font-bold">MASTER</span>          │
-            │  api <span class="syn-yellow">:7000</span>  ·  hz <span class="syn-yellow">:6000</span>     │
-            └──────────────┬──────────────┘
-                           │ <span class="syn-comment">task dispatch</span>
-       ┌───────────────────┼───────────────────┐
-       │                   │                   │
-  ┌────┴─────┐        ┌────┴─────┐        ┌────┴─────┐
-  │  node-1  │        │  node-2  │        │  node-3  │
-  │ wrapper  │        │ wrapper  │        │ wrapper  │
-  └────┬─────┘        └────┬─────┘        └────┬─────┘
-       │                   │                   │
-   <span class="syn-purple">a1b2c3</span>              <span class="syn-purple">d4e5f6</span>              <span class="syn-purple">g7h8i9</span>
-   lobby <span class="syn-green">ONLINE</span>        survival <span class="syn-green">ONLINE</span>     build <span class="syn-yellow">STARTING</span>
-   <span class="syn-yellow">:25565</span>              <span class="syn-yellow">:25566</span>              <span class="syn-yellow">:25567</span></pre>
+		<div class="ct-topo">
+			<div class="ct-card ct-master" style="--dot:var(--color-accent)">
+				<div class="ct-head">
+					<span class="ct-dot ct-dot--beat"></span>
+					<span class="text-fg-1 font-semibold">node-1</span>
+					<span class="ct-tag text-accent">MASTER</span>
+				</div>
+				<div class="ct-sub">
+					<span class="syn-comment">api</span> <span class="syn-yellow">:7000</span>
+					<span class="ct-sep">·</span>
+					<span class="syn-comment">hz</span> <span class="syn-yellow">:6000</span>
+				</div>
+			</div>
+
+			<div class="ct-fan" aria-hidden="true">
+				<span class="ct-trunk"><span class="ct-pulse" style="animation-delay:0.15s"></span></span>
+				{
+					wrappers.map((w) => (
+						<div class="ct-branch">
+							<span class="ct-drop">
+								<span class="ct-pulse" style={`animation-delay:${w.delay}`} />
+							</span>
+						</div>
+					))
+				}
+			</div>
+
+			<div class="ct-wrappers">
+				{
+					wrappers.map((w) => (
+						<div class="ct-card ct-node" style={`--dot:${tone(w.state)}`}>
+							<div class="ct-head">
+								<span
+									class:list={[
+										'ct-dot',
+										w.state === 'STARTING' ? 'ct-dot--blink' : 'ct-dot--live'
+									]}
+								/>
+								<span class="text-fg-1 font-semibold">{w.node}</span>
+								<span class="ct-tag syn-comment">wrapper</span>
+							</div>
+							<div class="ct-divider" />
+							<div class="ct-inst-id syn-purple">{w.id}</div>
+							<div class="ct-inst-row">
+								<span class="text-fg-2">{w.name}</span>
+								<span class="ct-state" style={`color:${tone(w.state)}`}>
+									{w.state}
+								</span>
+							</div>
+							<div class="ct-inst-port syn-yellow">{w.port}</div>
+						</div>
+					))
+				}
+			</div>
+		</div>
 	</div>
 </FilePane>
