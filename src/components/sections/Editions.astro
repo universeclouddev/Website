@@ -1,6 +1,6 @@
 ---
 import FilePane from '../FilePane.astro';
-import { OSS_ROWS, LICENSED_ROWS } from '../../data';
+import { OSS_ROWS, LICENSED_ROWS, EDITION_MATRIX } from '../../data';
 
 const tables = [
 	{ name: 'open-source', tagline: 'free · self-host · apache-2.0', rows: OSS_ROWS, dot: 'var(--color-syn-green)' },
@@ -8,7 +8,7 @@ const tables = [
 ];
 ---
 
-<FilePane id="editions" label="editions.toml" dot="var(--color-syn-orange)" meta="toml" lines={OSS_ROWS.length + LICENSED_ROWS.length + 4}>
+<FilePane id="editions" label="editions.toml" dot="var(--color-syn-orange)" meta="toml" lines={OSS_ROWS.length + LICENSED_ROWS.length + EDITION_MATRIX.length + 6}>
 	<div class="editions-grid flex items-stretch gap-5 p-5 sm:p-6">
 		{
 			tables.map((t) => (
@@ -37,5 +37,42 @@ const tables = [
 				</div>
 			))
 		}
+	</div>
+
+	<div class="border-t border-line-1">
+		<div class="u-pane-title">
+			<span class="text-syn-comment italic"># feature comparison</span>
+		</div>
+		<div class="overflow-x-auto bg-surface-inset">
+			<table class="w-full border-collapse font-mono text-[12.5px]">
+				<thead>
+					<tr class="text-fg-3 text-left">
+						<th class="font-medium px-5 sm:px-6 py-2.5">capability</th>
+						<th class="font-medium px-4 py-2.5 text-center whitespace-nowrap">open-source</th>
+						<th class="font-medium px-4 py-2.5 text-center whitespace-nowrap">licensed</th>
+					</tr>
+				</thead>
+				<tbody>
+					{
+						EDITION_MATRIX.map(([label, oss, licensed]) => (
+							<tr class="u-cursorline border-t border-line-1">
+								<td class="px-5 sm:px-6 py-2 text-fg-2">{label}</td>
+								{[oss, licensed].map((cell) => (
+									<td class="px-4 py-2 text-center">
+										{cell === true ? (
+											<span class="syn-green">✓</span>
+										) : cell === false ? (
+											<span class="text-fg-3/50">—</span>
+										) : (
+											<span class="syn-aqua">{cell}</span>
+										)}
+									</td>
+								))}
+							</tr>
+						))
+					}
+				</tbody>
+			</table>
+		</div>
 	</div>
 </FilePane>

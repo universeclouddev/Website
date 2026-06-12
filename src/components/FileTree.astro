@@ -1,5 +1,8 @@
 ---
 import { FILES } from '../data';
+
+const folderCount = FILES.filter((f) => f.label.endsWith('/')).length;
+const fileCount = FILES.length - folderCount;
 ---
 
 <aside
@@ -42,7 +45,7 @@ import { FILES } from '../data';
 		</div>
 
 		<div class="mt-4 px-2 text-[11px] text-fg-3/80 leading-[1.7]">
-			<div class="text-syn-comment italic">// 6 files · 1 folder</div>
+			<div class="text-syn-comment italic">// {fileCount} files · {folderCount} folders</div>
 			<div class="text-syn-comment italic">// branch: main</div>
 		</div>
 	</div>

@@ -1,5 +1,3 @@
-// Universe landing — content. Real ports, commands, ids: numbers are sacred.
-
 export type FileTab = { id: string; label: string; dot: string };
 
 export const FILES: FileTab[] = [
@@ -50,7 +48,6 @@ export const PREVIEW_INSTANCES: Instance[] = [
 	{ id: 'j1k2l3', name: 'proxy', state: 'ONLINE', node: 'node-1', host: '127.0.0.1', port: 25577, runtime: 'tmux' }
 ];
 
-// [key, value, description]
 export const FEATURES: [string, string, string][] = [
 	['single-binary', 'no control plane', 'Master and wrapper live in one fat JAR. Node type is a config field, not a different install.'],
 	['clustering', 'hazelcast :6000', 'One master exposes the API and holds cluster state; N wrappers execute instances via task dispatch.'],
@@ -62,7 +59,6 @@ export const FEATURES: [string, string, string][] = [
 	['gitops', 'argocd export', 'Sync templates from Git; export Kubernetes manifests for ArgoCD tracking.']
 ];
 
-// [text, kind] — kind: "c" comment, "v" value line
 export const TEMPLATE_SRC: [string, string][] = [
 	['# server.properties', 'c'],
 	['server-port=%SERVER_PORT%', 'v'],
@@ -90,7 +86,6 @@ export const LICENSED_ROWS: [string, string | boolean][] = [
 	['deployment_help', 'hands-on, from LunarLabs']
 ];
 
-// default values the template playground replaces %VARS% with
 export const TEMPLATE_VARS: Record<string, string> = {
 	SERVER_PORT: '25565',
 	INSTANCE_NAME: 'lobby',
