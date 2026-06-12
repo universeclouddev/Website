@@ -84,7 +84,7 @@ const statusColor = (s: string) =>
 											<td class="px-3 py-1.5 syn-aqua whitespace-nowrap">{p.name}</td>
 											<td class="px-3 py-1.5 text-fg-3">{p.in}</td>
 											<td class="px-3 py-1.5 whitespace-nowrap"><SchemaType type={p.type} /></td>
-											<td class="px-3 py-1.5">{p.required ? <span class="syn-green">✓</span> : <span class="text-fg-3/50">—</span>}</td>
+											<td class="px-3 py-1.5">{p.required ? <span class="syn-green">✓</span> : <span class="text-fg-3/50">-</span>}</td>
 											<td class="px-3 py-1.5 text-fg-3 leading-snug">{p.description ?? ''}</td>
 										</tr>
 									))}

@@ -9,7 +9,7 @@ import { API_INFO, API_GROUPS, API_SCHEMAS, API_NAV, API_STATS } from '../api/sp
 ---
 
 <Layout
-	title="Universe API — REST + WebSocket reference"
+	title="Universe API: REST + WebSocket reference"
 	description="Reference for the Universe orchestrator API: bearer-authenticated REST endpoints and WebSocket streams to deploy, control and observe instances across the cluster."
 	navItems={API_NAV}
 	statusFile="api/README.md"
@@ -22,7 +22,7 @@ import { API_INFO, API_GROUPS, API_SCHEMAS, API_NAV, API_STATS } from '../api/sp
 			</h1>
 			<p class="mt-4 max-w-[64ch] text-fg-2 leading-relaxed">
 				Every console action is an endpoint. Deploy instances, stream live logs, edit templates and
-				dispatch commands across nodes — authenticated with a single bearer token, served by the
+				dispatch commands across nodes, authenticated with a single bearer token, served by the
 				master on <span class="syn-yellow">:7000</span>.
 			</p>
 
@@ -80,8 +80,8 @@ import { API_INFO, API_GROUPS, API_SCHEMAS, API_NAV, API_STATS } from '../api/sp
 						permissions & limits
 					</div>
 					<div class="flex-1 p-4 font-mono text-[12px] leading-[1.8] bg-surface-inset">
-						<div><span class="syn-green">ALL</span> <span class="text-fg-3">— full access · bypasses rate limits</span></div>
-						<div><span class="syn-aqua">PUBLIC</span> <span class="text-fg-3">— public reads only · no instance ops</span></div>
+						<div><span class="syn-green">ALL</span> <span class="text-fg-3">· full access · bypasses rate limits</span></div>
+						<div><span class="syn-aqua">PUBLIC</span> <span class="text-fg-3">· public reads only · no instance ops</span></div>
 						<div class="mt-2 text-fg-3 leading-relaxed">
 							Public keys are capped at <span class="text-fg-1">100</span> calls / <span class="text-fg-1">60s</span>;
 							admin keys are unmetered.
@@ -114,8 +114,8 @@ import { API_INFO, API_GROUPS, API_SCHEMAS, API_NAV, API_STATS } from '../api/sp
 	<FilePane id="schemas" label="schemas.ts" file="api/schemas.ts" dot="var(--color-syn-red)" meta="request & response models" lines={API_SCHEMAS.length}>
 		<div class="p-5 sm:p-6">
 			<p class="text-fg-2 mb-5 max-w-[70ch]">
-				The shapes referenced by every endpoint. <span class="syn-aqua">Aqua</span> types are links —
-				click to jump to their definition.
+				The shapes referenced by every endpoint. <span class="syn-aqua">Aqua</span> types are links.
+				Click to jump to their definition.
 			</p>
 			<div class="grid lg:grid-cols-2 gap-4 items-start">
 				{API_SCHEMAS.map((s) => <SchemaBlock schema={s} />)}

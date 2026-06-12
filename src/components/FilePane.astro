@@ -15,7 +15,7 @@ const { id, label, dot = 'var(--color-accent)', meta = '', lines, class: cls = '
 		<div class="u-pane-title">
 			<span class="w-2 h-2 rounded-full shrink-0" style={`background:${dot}`}></span>
 			<span class="text-fg-2">{label}</span>
-			{meta && <span class="text-fg-3/70 hidden sm:inline">— {meta}</span>}
+			{meta && <span class="text-fg-3/70 hidden sm:inline">· {meta}</span>}
 			{lines && <span class="ml-auto text-fg-3/60">{lines} lines</span>}
 		</div>
 		<slot />

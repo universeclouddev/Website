@@ -64,7 +64,7 @@ export const PREVIEW_INSTANCES: Instance[] = [
 ];
 
 export const FEATURES: [string, string, string][] = [
-	['clustering', 'master / wrapper', 'One master exposes the REST API; any number of wrapper nodes execute instances. Work is dispatched cluster-wide over Hazelcast — no extra message broker to run.'],
+	['clustering', 'master / wrapper', 'One master exposes the REST API; any number of wrapper nodes execute instances. Work is dispatched cluster-wide over Hazelcast, no extra message broker to run.'],
 	['templates', 'versioned file-trees', 'Instances are built from versioned template file-trees with dynamic %VARIABLE% replacement. Compose templates per group, choose one-of, or install whole groups.'],
 	['runtimes', 'screen · tmux · docker · k8s', 'Built-in screen and tmux. Docker and Kubernetes via extensions. The same configuration deploys to a laptop, a VM fleet, or a cluster without changes.'],
 	['api', 'REST + WebSocket :7000', 'Full lifecycle control over HTTP. Stream live logs and an interactive console over WebSockets. Bearer-token auth with ALL / PUBLIC permission scopes and rate limiting.'],
@@ -112,7 +112,7 @@ export const STACK: StackGroup[] = [
 export const TEMPLATE_SRC: [string, string][] = [
 	['# server.properties', 'c'],
 	['server-port=%SERVER_PORT%', 'v'],
-	['motd=%INSTANCE_NAME% — powered by Universe', 'v'],
+	['motd=%INSTANCE_NAME% - powered by Universe', 'v'],
 	['', ''],
 	['# start.flags', 'c'],
 	['--instance-id %INSTANCE_ID%', 'v'],
@@ -120,7 +120,7 @@ export const TEMPLATE_SRC: [string, string][] = [
 ];
 
 export const OSS_ROWS: [string, string | boolean][] = [
-	['orchestrator', 'full — master, wrappers, clustering'],
+	['orchestrator', 'full: master, wrappers, clustering'],
 	['node_caps', false],
 	['self_host', true],
 	['runtimes', 'screen, tmux, docker, kubernetes'],

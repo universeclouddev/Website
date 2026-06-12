@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Universe API",
-    "description": "REST and WebSocket API for the Universe orchestrator.\n\n## Authentication\nThe API uses Bearer token authentication. Include your token in the `Authorization` header:\n```\nAuthorization: Bearer YOUR_API_KEY\n```\n\n## Permissions\n- **ALL** — Full access to all endpoints (admin, instance management, config changes, logs)\n- **PUBLIC** — No instance endpoints are public. All instance operations require ALL permission.\n\n## Rate Limiting\nPublic API keys are rate-limited (default: 100 calls per 60 seconds). \nAdmin keys (ALL permission) bypass rate limits entirely.\n\n## WebSocket Endpoints\nWebSocket connections require the same `Authorization: Bearer TOKEN` header during the handshake.\n",
+    "description": "REST and WebSocket API for the Universe orchestrator.\n\n## Authentication\nThe API uses Bearer token authentication. Include your token in the `Authorization` header:\n```\nAuthorization: Bearer YOUR_API_KEY\n```\n\n## Permissions\n- **ALL**: Full access to all endpoints (admin, instance management, config changes, logs)\n- **PUBLIC**: No instance endpoints are public. All instance operations require ALL permission.\n\n## Rate Limiting\nPublic API keys are rate-limited (default: 100 calls per 60 seconds). \nAdmin keys (ALL permission) bypass rate limits entirely.\n\n## WebSocket Endpoints\nWebSocket connections require the same `Authorization: Bearer TOKEN` header during the handshake.\n",
     "version": "1.0.0",
     "contact": {
       "name": "Universe Team"
@@ -599,7 +599,7 @@
     "/instances/{id}/lifecycle": {
       "patch": {
         "summary": "Change instance lifecycle",
-        "description": "Controls the lifecycle of an instance:\n- `start` — Start a stopped instance\n- `stop` — Stop a running instance\n- `restart` — Restart the instance\n",
+        "description": "Controls the lifecycle of an instance:\n- `start`: Start a stopped instance\n- `stop`: Stop a running instance\n- `restart`: Restart the instance\n",
         "operationId": "patchInstanceLifecycle",
         "security": [
           {
@@ -1599,7 +1599,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "API key token. Generate keys via the console command `key create`.\n\n**Permission Levels:**\n- `ALL` — Full admin access to all endpoints\n- `PUBLIC` — Read-only access to public endpoints\n"
+        "description": "API key token. Generate keys via the console command `key create`.\n\n**Permission Levels:**\n- `ALL`: Full admin access to all endpoints\n- `PUBLIC`: Read-only access to public endpoints\n"
       }
     },
     "schemas": {
@@ -1670,7 +1670,7 @@
           "OFFLINE",
           "STOPPED"
         ],
-        "description": "- **CREATING** — Instance is being deployed\n- **ONLINE** — Instance is running and healthy\n- **OFFLINE** — Instance has missed heartbeats\n- **STOPPED** — Instance has been stopped\n"
+        "description": "- **CREATING**: Instance is being deployed\n- **ONLINE**: Instance is running and healthy\n- **OFFLINE**: Instance has missed heartbeats\n- **STOPPED**: Instance has been stopped\n"
       },
       "Configuration": {
         "type": "object",
