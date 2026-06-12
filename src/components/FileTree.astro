@@ -1,8 +1,14 @@
 ---
-import { FILES } from '../data';
+import { FILES, type FileTab } from '../data';
 
-const folderCount = FILES.filter((f) => f.label.endsWith('/')).length;
-const fileCount = FILES.length - folderCount;
+interface Props {
+	items?: FileTab[];
+	root?: string;
+}
+const { items = FILES, root = 'universe' } = Astro.props;
+
+const folderCount = items.filter((f) => f.label.endsWith('/')).length;
+const fileCount = items.length - folderCount;
 ---
 
 <aside
@@ -26,12 +32,12 @@ const fileCount = FILES.length - folderCount;
 					fill="currentColor"
 					fill-opacity="0.85"></path>
 			</svg>
-			<span class="tracking-tight">universe</span>
+			<span class="tracking-tight">{root}</span>
 		</div>
 
 		<div class="mt-0.5">
 			{
-				FILES.map((f) => (
+				items.map((f) => (
 					<a
 						href={`#${f.id}`}
 						data-tab={f.id}

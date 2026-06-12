@@ -4,14 +4,21 @@ import TitleBar from '../components/TitleBar.astro';
 import TabStrip from '../components/TabStrip.astro';
 import FileTree from '../components/FileTree.astro';
 import StatusBar from '../components/StatusBar.astro';
+import { FILES, type FileTab } from '../data';
 
 interface Props {
 	title?: string;
 	description?: string;
+	navItems?: FileTab[];
+	treeRoot?: string;
+	statusFile?: string;
 }
 const {
 	title = 'Universe — one JAR, the whole cluster',
-	description = 'Universe is a single-binary Minecraft server orchestrator: one fat JAR runs master and wrappers, clusters over Hazelcast, and deploys instances across screen, tmux, docker and kubernetes.'
+	description = 'Universe is a single-binary Minecraft server orchestrator: one fat JAR runs master and wrappers, clusters over Hazelcast, and deploys instances across screen, tmux, docker and kubernetes.',
+	navItems = FILES,
+	treeRoot = 'universe',
+	statusFile = 'README.md'
 } = Astro.props;
 ---
 
@@ -31,9 +38,9 @@ const {
 	<body>
 		<div class="w-full min-h-dvh bg-space-0">
 			<TitleBar />
-			<TabStrip />
+			<TabStrip items={navItems} />
 			<div class="flex items-start">
-				<FileTree />
+				<FileTree items={navItems} root={treeRoot} />
 				<main
 					class="flex-1 min-w-0 px-4 sm:px-7 pt-8 pb-20 space-y-10 sm:space-y-14"
 				>
@@ -41,7 +48,7 @@ const {
 				</main>
 			</div>
 		</div>
-		<StatusBar />
+		<StatusBar file={statusFile} />
 
 		<script>
 			import { initIde } from '../scripts/ide';

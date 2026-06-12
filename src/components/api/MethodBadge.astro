@@ -1,0 +1,22 @@
+---
+interface Props {
+	method: string;
+}
+const { method } = Astro.props;
+
+const COLOR: Record<string, string> = {
+	GET: 'var(--color-syn-blue)',
+	POST: 'var(--color-syn-green)',
+	PUT: 'var(--color-syn-orange)',
+	PATCH: 'var(--color-syn-yellow)',
+	DELETE: 'var(--color-syn-red)'
+};
+const c = COLOR[method] ?? 'var(--color-fg-2)';
+---
+
+<span
+	class="inline-flex items-center justify-center shrink-0 w-[58px] h-[22px] rounded-[var(--radius-2)] font-mono text-[10.5px] font-bold tracking-wider border"
+	style={`color:${c};border-color:color-mix(in srgb, ${c} 45%, transparent);background:color-mix(in srgb, ${c} 12%, transparent)`}
+>
+	{method}
+</span>

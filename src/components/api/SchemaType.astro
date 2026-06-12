@@ -1,0 +1,18 @@
+---
+interface Props {
+	type: string;
+	ref?: string;
+	class?: string;
+}
+const { type, ref, class: cls = '' } = Astro.props;
+---
+
+{
+	ref ? (
+		<a href={`#schema-${ref}`} class={`syn-aqua hover:underline ${cls}`}>
+			{type}
+		</a>
+	) : (
+		<span class={`syn-green ${cls}`}>{type}</span>
+	)
+}

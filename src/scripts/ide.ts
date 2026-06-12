@@ -63,6 +63,9 @@ function initScrollspy() {
 	const sbLine = document.getElementById('sb-line');
 	const sbPct = document.getElementById('sb-pct');
 	const labelById = new Map(FILES.map((f) => [f.id, f.label] as const));
+	const fileById = new Map(
+		sections.map((s) => [s.id, s.dataset.file ?? labelById.get(s.id) ?? ''] as const)
+	);
 	const FAKE_LINES = 248;
 	let current = '';
 
@@ -72,7 +75,7 @@ function initScrollspy() {
 		tabTargets.forEach((t) =>
 			t.classList.toggle('is-active', t.getAttribute('data-tab') === id)
 		);
-		const label = labelById.get(id);
+		const label = fileById.get(id);
 		if (sbFile && label) sbFile.textContent = `~/universe/${label}`;
 	};
 

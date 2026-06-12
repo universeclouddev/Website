@@ -1,0 +1,55 @@
+---
+import Gutter from '../Gutter.astro';
+import SchemaType from './SchemaType.astro';
+import type { SchemaDef } from '../../api/spec';
+
+interface Props {
+	schema: SchemaDef;
+}
+const { schema } = Astro.props;
+
+const isEnum = Boolean(schema.enumValues);
+const lineCount = isEnum ? (schema.enumValues?.length ?? 0) + 1 : schema.props.length + 2;
+
+const trailing = (p: SchemaDef['props'][number]) => {
+	const bits: string[] = [];
+	if (p.description) bits.push(p.description);
+	if (p.example !== undefined) bits.push(`e.g. ${p.example}`);
+	else if (p.defaultValue !== undefined) bits.push(`default ${p.defaultValue}`);
+	return bits.join(' · ');
+};
+---
+
+<div id={`schema-${schema.name}`} class="scroll-mt-16 rounded-[var(--radius-3)] border border-line-1 overflow-hidden">
+	<div class="u-pane-title justify-between text-[11px]">
+		<span class="flex items-center gap-2">
+			<span class="w-2 h-2 rounded-full" style="background:var(--color-syn-red)"></span>
+			<span class="text-fg-2">{schema.name}</span>
+		</span>
+		<span class="text-fg-3/70">{isEnum ? 'enum' : 'interface'}</span>
+	</div>
+
+	{schema.description && <p class="bg-space-2 px-4 py-2 text-[11.5px] text-syn-comment italic"># {schema.description}</p>}
+
+	<div class="flex bg-surface-inset font-mono text-[12.5px] leading-[1.7]">
+		<Gutter count={lineCount} />
+		<div class="px-4 py-2 overflow-x-auto flex-1">{
+			isEnum ? (
+				<>
+					<div class="whitespace-pre"><span class="syn-purple">type</span> <span class="syn-yellow">{schema.name}</span> <span class="text-fg-3">=</span></div>
+					{schema.enumValues?.map((v) => (
+						<div class="whitespace-pre">{'  '}<span class="text-fg-3">| </span><span class="syn-green">"{v}"</span></div>
+					))}
+				</>
+			) : (
+				<>
+					<div class="whitespace-pre"><span class="syn-purple">interface</span> <span class="syn-yellow">{schema.name}</span> <span class="text-fg-3">{'{'}</span></div>
+					{schema.props.map((p) => (
+						<div class="whitespace-pre">{'  '}<span class="syn-aqua">{p.name}</span>{!p.required && <span class="text-fg-3">?</span>}<span class="text-fg-3">: </span><SchemaType type={p.type} ref={p.ref} />{p.nullable && <span class="text-fg-3"> | </span>}{p.nullable && <span class="syn-orange">null</span>}{trailing(p) && <span class="syn-comment">{'  // '}{trailing(p)}</span>}</div>
+					))}
+					<div class="whitespace-pre"><span class="text-fg-3">{'}'}</span></div>
+				</>
+			)
+		}</div>
+	</div>
+</div>

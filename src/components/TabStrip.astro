@@ -1,5 +1,10 @@
 ---
-import { FILES } from '../data';
+import { FILES, type FileTab } from '../data';
+
+interface Props {
+	items?: FileTab[];
+}
+const { items = FILES } = Astro.props;
 ---
 
 <nav
@@ -8,7 +13,7 @@ import { FILES } from '../data';
 	aria-label="sections"
 >
 	{
-		FILES.map((f) => (
+		items.map((f) => (
 			<a
 				href={`#${f.id}`}
 				data-tab={f.id}

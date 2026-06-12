@@ -1,4 +1,8 @@
 ---
+interface Props {
+	file?: string;
+}
+const { file = 'README.md' } = Astro.props;
 ---
 
 <footer
@@ -17,7 +21,7 @@
 	<span
 		id="sb-file"
 		class="flex items-center px-3 bg-space-2 text-fg-3 flex-1 min-w-0 truncate"
-	>~/universe/README.md</span>
+	>~/universe/{file}</span>
 	<span class="flex items-center px-3 bg-space-2 text-fg-3 sb-opt">utf-8</span>
 	<span class="flex items-center px-3 bg-space-2 text-fg-3 sb-opt">unix</span>
 	<span id="sb-line" class="flex items-center px-3 bg-space-4 text-fg-1">1:1</span>

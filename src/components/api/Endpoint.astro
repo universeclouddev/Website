@@ -1,0 +1,140 @@
+---
+import MethodBadge from './MethodBadge.astro';
+import SchemaType from './SchemaType.astro';
+import type { Endpoint } from '../../api/spec';
+
+interface Props {
+	endpoint: Endpoint;
+	open?: boolean;
+}
+const { endpoint: e, open = false } = Astro.props;
+
+const segments = e.path.split('/').filter(Boolean);
+
+const statusColor = (s: string) =>
+	s.startsWith('2')
+		? 'var(--color-syn-green)'
+		: s.startsWith('1')
+			? 'var(--color-syn-aqua)'
+			: s.startsWith('4')
+				? 'var(--color-syn-yellow)'
+				: 'var(--color-syn-red)';
+---
+
+<li class:list={['group border-t border-line-1', open && 'is-open']}>
+	<button
+		type="button"
+		data-fold
+		class="u-cursorline w-full text-left flex items-center gap-3 px-4 sm:px-5 py-3 cursor-pointer"
+	>
+		<span class="text-fg-3 w-3 shrink-0 transition-transform duration-150 group-[.is-open]:rotate-90 font-mono">
+			▸
+		</span>
+		<MethodBadge method={e.verb} />
+		<code class="font-mono text-[13px] whitespace-nowrap">{segments.map((s) => (<><span class="text-fg-3">/</span>{/^\{.*\}$/.test(s) ? <span class="syn-yellow">{s}</span> : <span class="text-fg-1">{s}</span>}</>))}</code>
+		{e.websocket && (
+			<span class="shrink-0 font-mono text-[9.5px] font-bold tracking-wider text-syn-purple border border-syn-purple/40 rounded-[var(--radius-1)] px-1.5 py-0.5">
+				WS
+			</span>
+		)}
+		<span class="hidden md:block flex-1 min-w-0 truncate text-fg-3 text-[12.5px]">{e.summary}</span>
+		<span class="ml-auto md:ml-0 shrink-0 flex items-center gap-1.5 font-mono text-[10.5px]">
+			{e.public ? (
+				<span class="syn-green flex items-center gap-1">
+					<span class="w-1.5 h-1.5 rounded-full bg-syn-green"></span>public
+				</span>
+			) : (
+				<span class="text-fg-3 flex items-center gap-1">
+					<svg width="9" height="9" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+						<rect x="5" y="11" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="2"></rect>
+						<path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2"></path>
+					</svg>
+					bearer
+				</span>
+			)}
+		</span>
+	</button>
+
+	<div class="grid grid-rows-[0fr] transition-all duration-200 ease-out group-[.is-open]:grid-rows-[1fr]">
+		<div class="overflow-hidden">
+			<div class="px-4 sm:px-5 pb-5 pt-1 space-y-4">
+				{e.description && (
+					<p class="text-syn-comment italic text-[12.5px] leading-relaxed whitespace-pre-wrap max-w-[80ch]">
+						{e.description.trim()}
+					</p>
+				)}
+
+				{e.params.length > 0 && (
+					<div>
+						<p class="font-mono text-[11px] text-fg-3 mb-1.5"># parameters</p>
+						<div class="rounded-[var(--radius-2)] border border-line-1 overflow-x-auto bg-surface-inset">
+							<table class="w-full border-collapse font-mono text-[12px]">
+								<thead>
+									<tr class="text-fg-3 text-left">
+										<th class="font-medium px-3 py-1.5">name</th>
+										<th class="font-medium px-3 py-1.5">in</th>
+										<th class="font-medium px-3 py-1.5">type</th>
+										<th class="font-medium px-3 py-1.5">req</th>
+										<th class="font-medium px-3 py-1.5 w-full">description</th>
+									</tr>
+								</thead>
+								<tbody>
+									{e.params.map((p) => (
+										<tr class="border-t border-line-1">
+											<td class="px-3 py-1.5 syn-aqua whitespace-nowrap">{p.name}</td>
+											<td class="px-3 py-1.5 text-fg-3">{p.in}</td>
+											<td class="px-3 py-1.5 whitespace-nowrap"><SchemaType type={p.type} /></td>
+											<td class="px-3 py-1.5">{p.required ? <span class="syn-green">✓</span> : <span class="text-fg-3/50">—</span>}</td>
+											<td class="px-3 py-1.5 text-fg-3 leading-snug">{p.description ?? ''}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				)}
+
+				{e.body && (
+					<div>
+						<p class="font-mono text-[11px] text-fg-3 mb-1.5"># request body</p>
+						<div class="flex flex-wrap items-center gap-2 font-mono text-[12px] rounded-[var(--radius-2)] border border-line-1 bg-surface-inset px-3 py-2">
+							<span class="text-fg-3">{e.body.contentType}</span>
+							<span class="text-fg-3">→</span>
+							<SchemaType type={e.body.type} ref={e.body.ref} />
+							{e.body.required && <span class="syn-orange text-[10.5px]">required</span>}
+						</div>
+					</div>
+				)}
+
+				<div>
+					<p class="font-mono text-[11px] text-fg-3 mb-1.5"># responses</p>
+					<div class="rounded-[var(--radius-2)] border border-line-1 overflow-hidden bg-surface-inset divide-y divide-line-1">
+						{e.responses.map((r) => (
+							<div class="flex items-center gap-3 px-3 py-1.5 font-mono text-[12px]">
+								<span
+									class="shrink-0 font-bold tabular-nums"
+									style={`color:${statusColor(r.status)}`}
+								>{r.status}</span>
+								<span class="text-fg-2 flex-1 min-w-0">{r.description}</span>
+								{r.type && <SchemaType type={r.type} ref={r.ref} class="shrink-0" />}
+							</div>
+						))}
+					</div>
+				</div>
+
+				<div>
+					<div class="flex items-center justify-between mb-1.5">
+						<p class="font-mono text-[11px] text-fg-3"># example</p>
+						<button
+							type="button"
+							data-copy={e.curl}
+							class="font-mono text-[10.5px] text-fg-3 hover:text-accent transition cursor-pointer"
+							aria-label="copy curl command"
+						>copy</button>
+					</div>
+					<pre class="rounded-[var(--radius-2)] border border-line-1 bg-surface-inset px-3 py-2.5 overflow-x-auto font-mono text-[12px] leading-[1.6] text-fg-1">{e.curl}</pre>
+				</div>
+			</div>
+		</div>
+	</div>
+</li>
