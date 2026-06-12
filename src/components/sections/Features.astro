@@ -1,0 +1,41 @@
+---
+import FilePane from '../FilePane.astro';
+import { FEATURES } from '../../data';
+---
+
+<FilePane id="features" label="features.yaml" dot="var(--color-syn-green)" meta="yaml" lines={FEATURES.length * 2}>
+	<div class="font-mono text-[13px] leading-[1.7] py-3">
+		<div class="px-5 pb-1">
+			<span class="text-syn-purple">features</span><span class="text-fg-3">:</span>
+			<span class="text-syn-comment italic ml-2"># click a key to unfold (za)</span>
+		</div>
+
+		<ul>
+			{
+				FEATURES.map(([k, v, desc], i) => (
+					<li class:list={['group border-t border-line-1', i === 0 && 'is-open']}>
+						<button
+							type="button"
+							data-fold
+							class="u-cursorline w-full text-left flex items-center gap-2 px-5 py-2.5 cursor-pointer"
+						>
+							<span class="text-fg-3 w-3 shrink-0 transition-transform duration-150 group-[.is-open]:rotate-90">
+								▸
+							</span>
+							<span class="text-syn-aqua">{k}</span>
+							<span class="text-fg-3">:</span>
+							<span class="syn-green truncate">"{v}"</span>
+						</button>
+						<div class="grid grid-rows-[0fr] transition-all duration-200 ease-out group-[.is-open]:grid-rows-[1fr]">
+							<div class="overflow-hidden">
+								<p class="px-5 pb-3 pl-10 text-syn-comment italic max-w-[78ch] leading-relaxed">
+									# {desc}
+								</p>
+							</div>
+						</div>
+					</li>
+				))
+			}
+		</ul>
+	</div>
+</FilePane>

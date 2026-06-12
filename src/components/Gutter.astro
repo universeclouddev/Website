@@ -1,0 +1,15 @@
+---
+interface Props {
+	count: number;
+	start?: number;
+}
+const { count, start = 1 } = Astro.props;
+const nums = Array.from({ length: count }, (_, i) => start + i);
+---
+
+<div
+	class="select-none text-right px-3 text-fg-3/70 font-mono text-[12.5px] leading-[1.7] border-r border-line-1 shrink-0 tabular-nums"
+	aria-hidden="true"
+>
+	{nums.map((n) => <div>{n}</div>)}
+</div>

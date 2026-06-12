@@ -1,0 +1,53 @@
+---
+import '../styles/global.css';
+import TitleBar from '../components/TitleBar.astro';
+import TabStrip from '../components/TabStrip.astro';
+import FileTree from '../components/FileTree.astro';
+import StatusBar from '../components/StatusBar.astro';
+
+interface Props {
+	title?: string;
+	description?: string;
+}
+const {
+	title = 'Universe — one JAR, the whole cluster',
+	description = 'Universe is a single-binary Minecraft server orchestrator: one fat JAR runs master and wrappers, clusters over Hazelcast, and deploys instances across screen, tmux, docker and kubernetes.'
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<meta name="generator" content={Astro.generator} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:type" content="website" />
+	</head>
+	<body>
+		<div
+			class="mx-auto max-w-[var(--container-wide)] min-h-dvh bg-space-0 border-x border-line-1"
+		>
+			<TitleBar />
+			<TabStrip />
+			<div class="flex items-start">
+				<FileTree />
+				<main
+					class="flex-1 min-w-0 px-4 sm:px-7 pt-8 pb-20 space-y-10 sm:space-y-14"
+				>
+					<slot />
+				</main>
+			</div>
+		</div>
+		<StatusBar />
+
+		<script>
+			import { initIde } from '../scripts/ide';
+			initIde();
+		</script>
+	</body>
+</html>

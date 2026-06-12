@@ -1,0 +1,72 @@
+---
+import FilePane from '../FilePane.astro';
+import Terminal from '../Terminal.astro';
+import { BOOT_LINES } from '../../data';
+---
+
+<FilePane id="readme" label="README.md" dot="var(--color-syn-blue)" meta="markdown" lines={42}>
+	<div class="p-5 sm:p-8">
+		<div class="hero-split grid gap-8 items-center [grid-template-columns:1.05fr_0.95fr]">
+			<!-- left: the readme prose -->
+			<div>
+				<p class="u-label mb-4">single-binary minecraft orchestrator</p>
+
+				<h1
+					class="font-mono font-extrabold tracking-tight leading-[1.08] text-[clamp(30px,4.6vw,52px)] text-fg-1"
+				>
+					<span class="text-accent">#</span> One JAR.<br />
+					<span class="text-accent">#</span> The whole
+					<span class="syn-green">cluster</span><span class="text-accent">.</span>
+				</h1>
+
+				<p class="mt-5 max-w-[46ch] text-fg-2 leading-relaxed">
+					Master and wrapper live in the same fat JAR. Form a Hazelcast cluster, expose one
+					REST&nbsp;+&nbsp;WebSocket API, and deploy instances across
+					<span class="syn-aqua">screen</span>, <span class="syn-aqua">tmux</span>,
+					<span class="syn-aqua">docker</span> and <span class="syn-aqua">kubernetes</span> —
+					same config, swap one field.
+				</p>
+
+				<div class="mt-6 flex flex-wrap gap-2.5 font-mono text-[11px]">
+					<span class="px-2 py-1 rounded-[var(--radius-2)] bg-space-2 border border-line-1 text-fg-2">java 21+</span>
+					<span class="px-2 py-1 rounded-[var(--radius-2)] bg-space-2 border border-line-1 text-fg-2">apache-2.0</span>
+					<span class="px-2 py-1 rounded-[var(--radius-2)] bg-space-2 border border-line-1 text-syn-yellow">v0.0.1</span>
+				</div>
+
+				<div class="mt-7 flex flex-wrap items-center gap-3">
+					<a
+						href="#preview"
+						class="inline-flex items-center gap-2 px-4 h-10 rounded-[var(--radius-2)] bg-accent text-accent-ink font-mono text-[13px] font-semibold hover:no-underline hover:brightness-110 transition"
+					>
+						<span class="text-accent-ink/70">❯</span> read the docs
+					</a>
+					<a
+						href="#templates"
+						class="inline-flex items-center gap-2 px-4 h-10 rounded-[var(--radius-2)] border border-line-2 text-fg-1 font-mono text-[13px] hover:bg-space-2 hover:no-underline transition"
+					>
+						git clone universe
+					</a>
+				</div>
+			</div>
+
+			<!-- divider -->
+			<!-- right: boot log -->
+			<div class="relative">
+				<div class="split-divider hidden lg:block absolute -left-4 top-0 bottom-0 w-px bg-line-1"></div>
+				<div class="rounded-[var(--radius-3)] border border-line-1 overflow-hidden shadow-[var(--shadow-panel)]">
+					<div
+						class="flex items-center gap-2 px-3 h-8 bg-space-2 border-b border-line-1 font-mono text-[11px] text-fg-3"
+					>
+						<span class="flex items-center gap-1.5">
+							<i class="w-2.5 h-2.5 rounded-full" style="background:#f7768e"></i>
+							<i class="w-2.5 h-2.5 rounded-full" style="background:#e0af68"></i>
+							<i class="w-2.5 h-2.5 rounded-full" style="background:#9ece6a"></i>
+						</span>
+						<span class="ml-1">loader.log — node-1</span>
+					</div>
+					<Terminal lines={BOOT_LINES} typewriter cursor />
+				</div>
+			</div>
+		</div>
+	</div>
+</FilePane>

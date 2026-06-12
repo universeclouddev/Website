@@ -1,0 +1,41 @@
+---
+import FilePane from '../FilePane.astro';
+import { OSS_ROWS, LICENSED_ROWS } from '../../data';
+
+const tables = [
+	{ name: 'open-source', tagline: 'free · self-host · apache-2.0', rows: OSS_ROWS, dot: 'var(--color-syn-green)' },
+	{ name: 'licensed', tagline: 'hardened · sla · from LunarLabs', rows: LICENSED_ROWS, dot: 'var(--color-syn-orange)' }
+];
+---
+
+<FilePane id="editions" label="editions.toml" dot="var(--color-syn-orange)" meta="toml" lines={OSS_ROWS.length + LICENSED_ROWS.length + 4}>
+	<div class="editions-grid flex items-stretch gap-5 p-5 sm:p-6">
+		{
+			tables.map((t) => (
+				<div class="flex-1 min-w-0 rounded-[var(--radius-3)] border border-line-1 overflow-hidden">
+					<div class="u-pane-title justify-between">
+						<span class="flex items-center gap-2">
+							<span class="w-2 h-2 rounded-full" style={`background:${t.dot}`} />
+							[{t.name}]
+						</span>
+						<span class="text-fg-3/70 text-[10.5px]">{t.tagline}</span>
+					</div>
+					<div class="bg-surface-inset p-5 font-mono text-[13px] leading-[2]">
+						<div class="syn-purple mb-1">[{t.name}]</div>
+						{t.rows.map(([k, v]) => (
+							<div class="whitespace-pre-wrap break-words">
+								<span class="syn-aqua">{k}</span>
+								<span class="text-fg-3"> = </span>
+								{typeof v === 'boolean' ? (
+									<span class={v ? 'syn-green' : 'syn-red'}>{String(v)}</span>
+								) : (
+									<span class="syn-green">"{v}"</span>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
+			))
+		}
+	</div>
+</FilePane>

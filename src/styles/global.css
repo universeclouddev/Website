@@ -1,0 +1,369 @@
+/* Universe — "the editor session". Tokyo Night IDE landing.
+   Brand tokens from the Universe Design System readme. */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Ubuntu:wght@400;500;700&display=swap');
+@import 'tailwindcss';
+
+/* ---------- Theme tokens → Tailwind utilities + CSS vars (--color-*, --font-*, --radius-*) ---------- */
+@theme {
+	/* surfaces — background ramp (Tokyo Night) */
+	--color-space-0: #1a1b26; /* page */
+	--color-space-1: #1f2335; /* panes */
+	--color-space-2: #24283b; /* strips / cards */
+	--color-space-3: #292e42; /* cursorline / hover */
+	--color-space-4: #3b4261; /* selection */
+	--color-surface-inset: #16161e; /* terminal wells */
+	--color-surface-inset-2: #1a1b26; /* terminal/pane chrome strips */
+
+	/* text */
+	--color-fg-1: #c0caf5;
+	--color-fg-2: #a9b1d6;
+	--color-fg-3: #565f89; /* gutters / muted */
+
+	/* lines */
+	--color-line-1: #2a2e44; /* subtle hairline */
+	--color-line-2: #3b4261; /* stronger rule */
+
+	/* accent — tokyo night blue */
+	--color-accent: #7aa2f7;
+	--color-accent-ink: #1a1b26;
+
+	/* syntax set (semantic color voice) */
+	--color-syn-red: #f7768e;
+	--color-syn-green: #9ece6a;
+	--color-syn-yellow: #e0af68;
+	--color-syn-blue: #7aa2f7;
+	--color-syn-purple: #bb9af7;
+	--color-syn-aqua: #7dcfff;
+	--color-syn-orange: #ff9e64;
+	--color-syn-comment: #565f89;
+
+	/* terminal / tty */
+	--color-tty-out: #a9b1d6;
+	--color-tty-dim: #565f89;
+	--color-tty-bright: #c0caf5;
+	--color-tty-ok: #9ece6a;
+	--color-tty-warn: #e0af68;
+	--color-tty-err: #f7768e;
+	--color-tty-prompt: #7dcfff;
+
+	/* radii — editor-chrome rounding */
+	--radius-1: 2px;
+	--radius-2: 4px;
+	--radius-3: 6px;
+	--radius-round: 999px;
+
+	/* type */
+	--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+	--font-body: 'Ubuntu', system-ui, sans-serif;
+}
+
+/* ---------- non-utility tokens ---------- */
+:root {
+	color-scheme: dark;
+
+	--line-accent: rgba(122, 162, 247, 0.4);
+
+	/* motion — editor-snappy */
+	--dur-fast: 130ms;
+	--dur-base: 180ms;
+	--ease-out: cubic-bezier(0.25, 0, 0.2, 1);
+
+	/* layout */
+	--container-wide: 1380px;
+	--text-xl: clamp(26px, 3vw, 36px);
+
+	/* depth */
+	--glow-online: 0 0 6px rgba(158, 206, 106, 0.55);
+	--shadow-panel: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- base ---------- */
+* {
+	box-sizing: border-box;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	padding-bottom: 29px; /* fixed vim status bar */
+	background: var(--color-space-0);
+	color: var(--color-fg-1);
+	font-family: var(--font-body);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+::selection {
+	background: var(--color-space-4);
+	color: var(--color-fg-1);
+}
+
+a {
+	color: var(--color-accent);
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+
+code,
+pre,
+kbd,
+samp {
+	font-family: var(--font-mono);
+}
+
+/* IDE scrollbars */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-space-4) transparent;
+}
+*::-webkit-scrollbar {
+	width: 11px;
+	height: 11px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--color-space-4);
+	border: 3px solid var(--color-space-0);
+	border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: #414868;
+}
+
+/* ---------- syntax color helpers ---------- */
+.syn-red {
+	color: var(--color-syn-red);
+}
+.syn-green {
+	color: var(--color-syn-green);
+}
+.syn-yellow {
+	color: var(--color-syn-yellow);
+}
+.syn-blue {
+	color: var(--color-syn-blue);
+}
+.syn-purple {
+	color: var(--color-syn-purple);
+}
+.syn-aqua {
+	color: var(--color-syn-aqua);
+}
+.syn-orange {
+	color: var(--color-syn-orange);
+}
+.syn-comment {
+	color: var(--color-syn-comment);
+	font-style: italic;
+}
+
+/* ---------- comment-style eyebrow label ---------- */
+.u-label {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.02em;
+	color: var(--color-fg-3);
+}
+.u-label::before {
+	content: '# ';
+	color: var(--color-syn-green);
+}
+
+/* ---------- pane (a "file" surface) ---------- */
+.u-pane {
+	background: var(--color-space-1);
+	border: 1px solid var(--color-line-1);
+	border-radius: var(--radius-3);
+	overflow: hidden;
+}
+.u-pane-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 14px;
+	background: var(--color-space-2);
+	border-bottom: 1px solid var(--color-line-1);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	color: var(--color-fg-3);
+}
+
+/* ---------- cursorline hover ---------- */
+.u-cursorline {
+	transition: background var(--dur-fast) var(--ease-out);
+}
+.u-cursorline:hover {
+	background: var(--color-space-3);
+}
+
+/* ---------- blinking block cursor ---------- */
+.u-cursor {
+	display: inline-block;
+	width: 0.55em;
+	height: 1.05em;
+	vertical-align: text-bottom;
+	background: var(--color-accent);
+	animation: u-blink 1.05s steps(1) infinite;
+}
+@keyframes u-blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+/* ---------- editor indent guide backdrop ---------- */
+.u-indent-bg {
+	position: relative;
+}
+.u-indent-bg::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background-image: linear-gradient(
+		90deg,
+		transparent 0,
+		transparent 17px,
+		rgba(124, 111, 100, 0.12) 17px,
+		rgba(124, 111, 100, 0.12) 18px,
+		transparent 18px
+	);
+}
+
+/* ---------- editor tab (tab strip) ---------- */
+.u-tab {
+	position: relative;
+	color: var(--color-fg-3);
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		background var(--dur-fast) var(--ease-out);
+}
+.u-tab::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 2px;
+	background: transparent;
+	transition: background var(--dur-fast) var(--ease-out);
+}
+.u-tab:hover {
+	color: var(--color-fg-1);
+	background: var(--color-space-3);
+}
+.u-tab.is-active {
+	color: var(--color-fg-1);
+	background: var(--color-space-1);
+}
+.u-tab.is-active::before {
+	background: var(--color-accent);
+}
+
+/* ---------- file-tree row ---------- */
+.u-ftrow {
+	position: relative;
+	transition:
+		color var(--dur-fast) var(--ease-out),
+		background var(--dur-fast) var(--ease-out);
+}
+.u-ftrow::before {
+	content: '';
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 2px;
+	background: transparent;
+}
+.u-ftrow:hover {
+	background: var(--color-space-3);
+	color: var(--color-fg-1);
+}
+.u-ftrow.is-active {
+	background: var(--color-space-3);
+	color: var(--color-fg-1);
+}
+.u-ftrow.is-active::before {
+	background: var(--color-accent);
+}
+
+/* ---------- sub-tab (preview panes) ---------- */
+.u-subtab {
+	color: var(--color-fg-3);
+	border-bottom: 2px solid transparent;
+	transition: color var(--dur-fast) var(--ease-out);
+}
+.u-subtab:hover {
+	color: var(--color-fg-1);
+}
+.u-subtab.is-active {
+	color: var(--color-fg-1);
+	border-bottom-color: var(--color-accent);
+}
+
+/* ---------- scroll reveal ---------- */
+.u-reveal {
+	opacity: 0;
+	transform: translateY(10px);
+	transition:
+		opacity 0.5s var(--ease-out),
+		transform 0.5s var(--ease-out);
+}
+.u-reveal.is-in {
+	opacity: 1;
+	transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.u-reveal {
+		opacity: 1;
+		transform: none;
+	}
+	.u-cursor {
+		animation: none;
+	}
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+	.filetree {
+		display: none !important;
+	}
+	.hero-split {
+		grid-template-columns: 1fr !important;
+	}
+	.split-divider {
+		display: none !important;
+	}
+	.preview-cols {
+		grid-template-columns: 1fr !important;
+	}
+	.editions-grid {
+		flex-direction: column !important;
+	}
+	.tpl-cols {
+		flex-direction: column !important;
+	}
+	.tpl-cols > .tpl-arrow {
+		transform: rotate(90deg);
+		align-self: center !important;
+	}
+	.sb-opt {
+		display: none !important;
+	}
+}

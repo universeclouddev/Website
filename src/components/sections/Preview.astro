@@ -1,0 +1,42 @@
+---
+import FilePane from '../FilePane.astro';
+import Terminal from '../Terminal.astro';
+import InstancesTable from '../InstancesTable.astro';
+import Gutter from '../Gutter.astro';
+import { CONSOLE_LINES } from '../../data';
+---
+
+<FilePane id="preview" label="preview/" dot="var(--color-syn-yellow)" meta="rest + websocket :7000" lines={10}>
+	<div
+		data-preview
+		class="flex items-stretch border-b border-line-1 bg-space-2 font-mono text-[12px]"
+	>
+		<button type="button" data-subtab="console" class="u-subtab is-active px-4 py-2.5 cursor-pointer">console</button>
+		<button type="button" data-subtab="curl" class="u-subtab px-4 py-2.5 cursor-pointer">curl.sh</button>
+		<button type="button" data-subtab="panel" class="u-subtab px-4 py-2.5 cursor-pointer">panel.tsv</button>
+	</div>
+
+	<div data-panel="console">
+		<Terminal lines={CONSOLE_LINES} cursor />
+	</div>
+
+	<div data-panel="curl" hidden>
+		<div class="flex bg-surface-inset font-mono text-[12.5px] leading-[1.7]">
+			<Gutter count={10} />
+			<pre class="px-4 py-3 overflow-x-auto"><code><span class="syn-comment">#!/usr/bin/env bash</span>
+<span class="syn-comment"># everything the console does — over http</span>
+KEY=<span class="syn-green">ak_live_…</span>    <span class="syn-comment"># bearer key · ALL scope</span>
+
+<span class="syn-aqua">curl</span> <span class="syn-yellow">:7000</span>/api/cluster/status \
+  <span class="text-fg-3">-H</span> <span class="syn-green">"Authorization: Bearer $KEY"</span>
+
+<span class="syn-aqua">curl</span> <span class="text-fg-3">-X</span> POST <span class="syn-yellow">:7000</span>/api/instance/<span class="syn-purple">a1b2c3</span>/execute \
+  <span class="text-fg-3">-H</span> <span class="syn-green">"Authorization: Bearer $KEY"</span> \
+  <span class="text-fg-3">-d</span> <span class="syn-green">"say Universe online"</span></code></pre>
+		</div>
+	</div>
+
+	<div data-panel="panel" hidden>
+		<InstancesTable />
+	</div>
+</FilePane>

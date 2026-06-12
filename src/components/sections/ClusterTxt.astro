@@ -1,0 +1,25 @@
+---
+import FilePane from '../FilePane.astro';
+---
+
+<FilePane id="cluster" label="cluster.txt" dot="var(--color-syn-aqua)" meta="topology" lines={22}>
+	<div class="bg-surface-inset overflow-x-auto">
+		<pre class="font-mono text-[12.5px] leading-[1.55] text-fg-2 p-5 sm:p-7 min-w-max"><span class="syn-comment"># one master exposes the api &amp; holds state · N wrappers execute instances</span>
+
+            ┌─────────────────────────────┐
+            │  node-1  ·  <span class="text-accent font-bold">MASTER</span>          │
+            │  api <span class="syn-yellow">:7000</span>  ·  hz <span class="syn-yellow">:6000</span>     │
+            └──────────────┬──────────────┘
+                           │ <span class="syn-comment">task dispatch</span>
+       ┌───────────────────┼───────────────────┐
+       │                   │                   │
+  ┌────┴─────┐        ┌────┴─────┐        ┌────┴─────┐
+  │  node-1  │        │  node-2  │        │  node-3  │
+  │ wrapper  │        │ wrapper  │        │ wrapper  │
+  └────┬─────┘        └────┬─────┘        └────┬─────┘
+       │                   │                   │
+   <span class="syn-purple">a1b2c3</span>              <span class="syn-purple">d4e5f6</span>              <span class="syn-purple">g7h8i9</span>
+   lobby <span class="syn-green">ONLINE</span>        survival <span class="syn-green">ONLINE</span>     build <span class="syn-yellow">STARTING</span>
+   <span class="syn-yellow">:25565</span>              <span class="syn-yellow">:25566</span>              <span class="syn-yellow">:25567</span></pre>
+	</div>
+</FilePane>

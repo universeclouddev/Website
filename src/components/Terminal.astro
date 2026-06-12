@@ -1,0 +1,44 @@
+---
+import type { TermLine } from '../data';
+
+interface Props {
+	lines: TermLine[];
+	typewriter?: boolean;
+	cursor?: boolean;
+	class?: string;
+}
+const { lines, typewriter = false, cursor = false, class: cls = '' } = Astro.props;
+
+const TONE: Record<string, string> = {
+	out: 'var(--color-tty-out)',
+	ok: 'var(--color-tty-ok)',
+	warn: 'var(--color-tty-warn)',
+	error: 'var(--color-tty-err)',
+	dim: 'var(--color-tty-dim)'
+};
+const toneColor = (t?: string) => TONE[t ?? 'out'] ?? 'var(--color-tty-out)';
+---
+
+<div
+	class:list={[
+		'bg-surface-inset font-mono text-[12.5px] leading-[1.7] p-4 sm:p-5 overflow-x-auto',
+		cls
+	]}
+	data-term={typewriter ? '' : null}
+>
+	{
+		lines.map((l, i) => (
+			<div
+				class="whitespace-pre"
+				data-line={typewriter ? String(i) : null}
+				style={typewriter ? 'opacity:0' : null}
+			>
+				{l.prompt && <span class="text-tty-prompt">❯ </span>}
+				<span style={`color:${l.prompt ? 'var(--color-tty-bright)' : toneColor(l.tone)}`}>
+					{l.text}
+				</span>
+			</div>
+		))
+	}
+	{cursor && <span class="u-cursor mt-1" data-term-cursor></span>}
+</div>

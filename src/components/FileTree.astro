@@ -1,0 +1,49 @@
+---
+import { FILES } from '../data';
+---
+
+<aside
+	class="filetree shrink-0 w-[230px] bg-space-1 border-r border-line-1 sticky top-9 self-start max-h-[calc(100dvh-36px-29px)] overflow-y-auto"
+>
+	<div
+		class="flex items-center justify-between px-3 pt-3 pb-2 font-mono text-[10.5px] tracking-[0.14em] uppercase text-fg-3"
+	>
+		<span>explorer</span>
+		<span class="text-fg-3/70">⌄</span>
+	</div>
+
+	<div class="px-1.5 pb-6 font-mono text-[12.5px] text-fg-2 leading-[1.9]">
+		<div class="flex items-center gap-1.5 px-2 py-0.5 text-fg-1">
+			<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+				<path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"></path>
+			</svg>
+			<svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="text-syn-yellow">
+				<path
+					d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"
+					fill="currentColor"
+					fill-opacity="0.85"></path>
+			</svg>
+			<span class="tracking-tight">universe</span>
+		</div>
+
+		<div class="mt-0.5">
+			{
+				FILES.map((f) => (
+					<a
+						href={`#${f.id}`}
+						data-tab={f.id}
+						class="u-ftrow flex items-center gap-2 pl-6 pr-2 py-[3px] rounded-[var(--radius-2)] text-fg-2"
+					>
+						<span class="w-1.5 h-1.5 rounded-full shrink-0" style={`background:${f.dot}`} />
+						<span class="truncate">{f.label}</span>
+					</a>
+				))
+			}
+		</div>
+
+		<div class="mt-4 px-2 text-[11px] text-fg-3/80 leading-[1.7]">
+			<div class="text-syn-comment italic">// 6 files · 1 folder</div>
+			<div class="text-syn-comment italic">// branch: main</div>
+		</div>
+	</div>
+</aside>

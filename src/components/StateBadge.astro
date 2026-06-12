@@ -1,0 +1,20 @@
+---
+interface Props {
+	state: string;
+}
+const { state } = Astro.props;
+
+const MAP: Record<string, { c: string; glow: boolean }> = {
+	ONLINE: { c: 'var(--color-tty-ok)', glow: true },
+	STARTING: { c: 'var(--color-tty-warn)', glow: false },
+	OFFLINE: { c: 'var(--color-tty-err)', glow: false }
+};
+const s = MAP[state] ?? { c: 'var(--color-fg-2)', glow: false };
+---
+
+<span class="inline-flex items-center gap-1.5 font-mono text-[11px] tracking-wide" style={`color:${s.c}`}>
+	<span
+		class="w-1.5 h-1.5 rounded-full shrink-0"
+		style={`background:${s.c};${s.glow ? 'box-shadow:var(--glow-online)' : ''}`}></span>
+	{state}
+</span>

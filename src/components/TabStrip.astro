@@ -1,0 +1,23 @@
+---
+import { FILES } from '../data';
+---
+
+<nav
+	id="tabstrip"
+	class="sticky top-0 z-30 flex items-stretch bg-space-2 border-b border-line-1 overflow-x-auto"
+	aria-label="sections"
+>
+	{
+		FILES.map((f) => (
+			<a
+				href={`#${f.id}`}
+				data-tab={f.id}
+				class="u-tab flex items-center gap-2 px-3.5 h-9 font-mono text-[12px] border-r border-line-1 whitespace-nowrap"
+			>
+				<span class="w-2 h-2 rounded-full shrink-0" style={`background:${f.dot}`} />
+				{f.label}
+			</a>
+		))
+	}
+	<span class="flex-1 min-w-4 border-b border-line-1"></span>
+</nav>

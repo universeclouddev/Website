@@ -1,0 +1,37 @@
+---
+import { PREVIEW_INSTANCES } from '../data';
+import StateBadge from './StateBadge.astro';
+---
+
+<div class="overflow-x-auto bg-surface-inset">
+	<table class="w-full border-collapse font-mono text-[12.5px] whitespace-nowrap">
+		<thead>
+			<tr class="text-fg-3 text-left">
+				<th class="font-medium px-4 py-2.5">id</th>
+				<th class="font-medium px-4 py-2.5">name</th>
+				<th class="font-medium px-4 py-2.5">state</th>
+				<th class="font-medium px-4 py-2.5">node</th>
+				<th class="font-medium px-4 py-2.5">host:port</th>
+				<th class="font-medium px-4 py-2.5">runtime</th>
+			</tr>
+		</thead>
+		<tbody>
+			{
+				PREVIEW_INSTANCES.map((it) => (
+					<tr class="u-cursorline border-t border-line-1">
+						<td class="px-4 py-2 text-syn-purple">{it.id}</td>
+						<td class="px-4 py-2 text-fg-1">{it.name}</td>
+						<td class="px-4 py-2">
+							<StateBadge state={it.state} />
+						</td>
+						<td class="px-4 py-2 text-fg-2">{it.node}</td>
+						<td class="px-4 py-2 text-fg-2">
+							{it.host}:<span class="text-syn-yellow">{it.port}</span>
+						</td>
+						<td class="px-4 py-2 text-syn-aqua">{it.runtime}</td>
+					</tr>
+				))
+			}
+		</tbody>
+	</table>
+</div>

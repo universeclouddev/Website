@@ -1,0 +1,87 @@
+---
+import FilePane from '../FilePane.astro';
+import Gutter from '../Gutter.astro';
+import { TEMPLATE_SRC, TEMPLATE_VARS } from '../../data';
+
+const varOrder = ['SERVER_PORT', 'INSTANCE_NAME', 'INSTANCE_ID', 'MAX_MEMORY'] as const;
+const n = TEMPLATE_SRC.length;
+---
+
+<FilePane id="templates" label="templates/" dot="var(--color-syn-purple)" meta="deploy-time render" lines={n}>
+	<div class="p-5 sm:p-6">
+		<p class="text-fg-2 mb-5 max-w-[70ch]">
+			Templates are versioned file trees per <span class="syn-aqua">group</span>/<span class="syn-aqua">name</span>.
+			Built-in and custom <span class="syn-purple">%VARIABLES%</span> are substituted when an instance
+			deploys — edit the values and watch the render.
+		</p>
+
+		<div class="tpl-cols flex items-stretch gap-5">
+			<!-- source -->
+			<div class="flex-1 min-w-0 rounded-[var(--radius-3)] border border-line-1 overflow-hidden">
+				<div class="u-pane-title text-[11px]">
+					<span class="w-2 h-2 rounded-full" style="background:var(--color-syn-purple)"></span>
+					templates/lobby/server.properties
+				</div>
+				<div class="flex bg-surface-inset font-mono text-[12.5px] leading-[1.7]">
+					<Gutter count={n} />
+					<pre class="px-4 py-2 overflow-x-auto"><code>{TEMPLATE_SRC.map(([text, kind]) => (
+						<div class="whitespace-pre min-h-[1.7em]">{
+							kind === 'c'
+								? <span class="syn-comment">{text}</span>
+								: kind === ''
+									? <span>{' '}</span>
+									: text.split(/(%[A-Z_]+%)/).map((part) =>
+											/^%[A-Z_]+%$/.test(part)
+												? <span class="syn-purple">{part}</span>
+												: <span class="text-fg-1">{part}</span>
+										)
+						}</div>
+					))}</code></pre>
+				</div>
+
+				<!-- variable inputs -->
+				<div class="border-t border-line-1 bg-space-2 px-4 py-3">
+					<p class="font-mono text-[11px] text-fg-3 mb-2"># variables</p>
+					<div class="grid grid-cols-2 gap-2.5">
+						{
+							varOrder.map((name) => (
+								<label class="flex flex-col gap-1 font-mono text-[11px]">
+									<span class="text-syn-purple">%{name}%</span>
+									<input
+										type="text"
+										data-var={name}
+										value={TEMPLATE_VARS[name]}
+										spellcheck="false"
+										autocomplete="off"
+										class="bg-surface-inset border border-line-2 rounded-[var(--radius-2)] px-2 py-1.5 text-fg-1 text-[12px] outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition"
+									/>
+								</label>
+							))
+						}
+					</div>
+				</div>
+			</div>
+
+			<!-- arrow -->
+			<div class="tpl-arrow flex items-center justify-center shrink-0 text-accent text-2xl font-mono">
+				→
+			</div>
+
+			<!-- rendered -->
+			<div class="flex-1 min-w-0 rounded-[var(--radius-3)] border border-line-1 overflow-hidden self-start">
+				<div class="u-pane-title text-[11px]">
+					<span class="w-2 h-2 rounded-full" style="background:var(--color-syn-green)"></span>
+					a1b2c3 · rendered
+					<span class="ml-auto text-syn-green text-[10px]">DEPLOYED</span>
+				</div>
+				<div class="flex bg-surface-inset font-mono text-[12.5px] leading-[1.7]">
+					<Gutter count={n} />
+					<pre
+						id="tpl-out"
+						class="px-4 py-2 overflow-x-auto flex-1"
+						aria-live="polite"></pre>
+				</div>
+			</div>
+		</div>
+	</div>
+</FilePane>
