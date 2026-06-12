@@ -1,0 +1,83 @@
+---
+title: Discord
+order: 8
+lead: 'The Discord extension runs a JDA-powered bot that manages the cluster through slash commands. It covers monitoring, instance lifecycle, and stdin execution, with optional role-based access control and channels for status and console mirroring.'
+description: 'A Discord bot that manages Universe through slash commands: setup with a bot token, the config keys, the full command list, and role-based access control.'
+---
+
+The Discord extension exposes Universe over a chat interface. Operators run slash commands to see cluster status, list instances and configurations, start and stop instances, and pipe commands to a running instance's stdin. Access can be limited to specific Discord roles, and console output can be mirrored into a channel.
+
+## Setup
+
+<Steps>
+<Step title="Create a Discord bot">
+In the Discord Developer Portal, create an application, add a bot, and copy its token. Under OAuth2, select the `bot` and `applications.commands` scopes and grant `Send Messages`, `Embed Links`, `Use Application Commands`, and `Read Message History`.
+</Step>
+<Step title="Write the config">
+Create `./extensions/discord/config.json` with your token and server details:
+
+```json title="extensions/discord/config.json"
+{
+	"token": "YOUR_BOT_TOKEN_HERE",
+	"guildId": "123456789012345678",
+	"statusChannelId": "",
+	"logChannelId": "",
+	"embedColor": 5814783,
+	"allowedRoleIds": ["123456789012345678"],
+	"intents": ["MESSAGE_CONTENT", "GUILD_MESSAGES", "GUILD_MEMBERS"]
+}
+```
+
+</Step>
+<Step title="Install and restart">
+Place `extension-discord.jar` in `./extensions/` and restart Universe. The bot registers its slash commands on startup, scoped to `guildId` when set.
+</Step>
+</Steps>
+
+<Callout type="warning">
+The bot token grants full control of your application. Keep `config.json` out of version control and treat it like any other secret.
+</Callout>
+
+## Configuration keys
+
+| Field | Type | Required | Purpose |
+| --- | --- | --- | --- |
+| `token` | string | Yes | Bot token from the Developer Portal. |
+| `guildId` | string | No | Server ID used to scope command registration. |
+| `statusChannelId` | string | No | Channel for status updates. |
+| `logChannelId` | string | No | Channel that mirrors console output. |
+| `embedColor` | integer | No | Embed color (default `5814783`). |
+| `allowedRoleIds` | array | No | Role IDs allowed to run commands. |
+| `intents` | array | No | Gateway intents (defaults required for command handling). |
+
+## Slash commands
+
+| Command | Parameters | Function |
+| --- | --- | --- |
+| `/status` | none | Cluster overview: active instance count and configuration count. |
+| `/instances` | none | List active instances with state, address, and runtime type. |
+| `/configurations` | none | List all configurations. |
+| `/instance` | `id` | Retrieve details for a specific instance. |
+| `/start` | `configuration` | Start an instance from a named configuration. |
+| `/stop` | `id` | Stop an instance by ID. |
+| `/execute` | `id`, `command` | Send a command string to a running instance's stdin. |
+
+## Access control
+
+`allowedRoleIds` restricts commands to the listed Discord roles. A user without an authorized role receives an error response. An empty array permits everyone. To find a role ID, enable Developer Mode in Discord, right-click the role, and choose **Copy Role ID**.
+
+<Callout type="note">
+The extension is built on JDA 6.4.1 and Cloud JDA6. Its dependencies are relocated inside the JAR to avoid conflicts with the orchestrator's own classpath.
+</Callout>
+
+<CardGrid>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+How the bot JAR is discovered and loaded at startup.
+</Card>
+<Card title="API reference" href="/docs/api-reference/overview">
+The same instance and command actions over REST.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Wire your own integration into Universe.
+</Card>
+</CardGrid>

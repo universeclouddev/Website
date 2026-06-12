@@ -1,0 +1,131 @@
+---
+title: Server plugins
+order: 2
+lead: 'Drop-in Bukkit plugins for Paper, Spigot, and Folia. Each registers its server as an ONLINE instance, heartbeats player count and TPS to the Master, and exposes the /universe command set.'
+description: 'Install the Paper, Spigot, and Folia server plugins. Each registers the server as an ONLINE instance, sends a recurring heartbeat with player count and TPS, and adds the /universe command set.'
+---
+
+Universe ships a drop-in Bukkit plugin for each supported server platform: Paper 1.21.11+, Spigot 1.8.8, and Folia 1.21+. On startup each plugin registers the server as an `ONLINE` instance with the Master, begins a recurring heartbeat, and registers the `/universe` command set. The three variants share the same configuration and behaviour, differing only in how they parse commands and schedule work for their platform.
+
+## What the plugin does on load
+
+The startup sequence is four sequential steps:
+
+1. Resolve the Master URL from system properties, environment variables, `config.yml`, or the `http://localhost:7000` default.
+1. Retrieve the instance ID from the same set of configuration sources.
+1. Report `ONLINE` state via `PUT /api/instances/{id}/state`.
+1. Start a heartbeat task, on a 30-second interval by default.
+
+<Callout type="warning">
+Without a configured instance ID, the plugin logs a warning and skips Master registration entirely. Wire the ID through the runtime so each server knows which instance it is.
+</Callout>
+
+## Install
+
+Build the variant that matches your server platform, then drop the JAR into the server's `plugins/` directory and restart.
+
+<Tabs tabs={['Paper', 'Spigot', 'Folia']}>
+<Fragment slot="0">
+
+The modern Paper variant uses Incendo Cloud for command parsing and MiniMessage for chat formatting.
+
+```bash
+./gradlew :minecraft:minecraft-modern:build
+# Output: .built/minecraft-modern-<version>.jar
+```
+
+</Fragment>
+<Fragment slot="1">
+
+The legacy Spigot variant targets 1.8.8, uses `LegacyPaperCommandManager`, and formats chat with ampersand-prefixed color codes.
+
+```bash
+./gradlew :minecraft:minecraft-legacy:build
+# Output: .built/minecraft-legacy-<version>.jar
+```
+
+</Fragment>
+<Fragment slot="2">
+
+The Folia variant schedules its heartbeat with `Bukkit.getAsyncScheduler().runAtFixedRate()` so it stays thread-safe across region threads.
+
+```bash
+./gradlew :minecraft:minecraft-folia:build
+# Output: .built/minecraft-folia-<version>.jar
+```
+
+</Fragment>
+</Tabs>
+
+## Configuration
+
+All three variants generate the same `plugins/Universe/config.yml` on first run:
+
+```yaml title="plugins/Universe/config.yml"
+master-url: "http://localhost:7000"
+instance-id: ""
+api-key: ""
+heartbeat-interval-seconds: 30
+```
+
+| Key | Default | Purpose |
+| --- | --- | --- |
+| master-url | `http://localhost:7000` | Base URL of the Master REST API. |
+| instance-id | (empty) | This server's instance ID. Required for registration. |
+| api-key | (empty) | Optional Bearer token for authenticated Masters. |
+| heartbeat-interval-seconds | `30` | Interval between state reports. |
+
+The instance ID resolves through system properties, then environment variables, then the config file, in that order of precedence. Inject it from the runtime so you never have to hand-edit the file per server:
+
+```bash title="system property or env var"
+-Duniverse.instance.id=%INSTANCE_ID%
+UNIVERSE_INSTANCE_ID=%INSTANCE_ID%
+```
+
+<Callout type="tip">
+Add `-Duniverse.instance.id=%INSTANCE_ID%` to your start command inside the instance template. Universe replaces `%INSTANCE_ID%` at deploy time, so every server self-identifies without manual configuration.
+</Callout>
+
+## What the plugin reports
+
+Each heartbeat sends a `PUT /api/instances/{id}/state` request carrying the live server snapshot: current player count, maximum players, server TPS, and the heartbeat timestamp in epoch milliseconds. This is what populates the `players`, `maxPlayers`, and `lastHeartbeat` fields that proxies and the plugin API read back.
+
+```json title="heartbeat payload"
+PUT /api/instances/{id}/state
+Content-Type: application/json
+
+{
+  "state": "ONLINE",
+  "players": 12,
+  "maxPlayers": 100,
+  "tps": 19.98,
+  "lastHeartbeat": 1718000000000
+}
+```
+
+## The /universe command set
+
+Three operator subcommands ship with every variant:
+
+| Command | Output |
+| --- | --- |
+| `/universe info` | Instance ID, Master URL, connection status, and current state. |
+| `/universe players` | Current and maximum player counts. |
+| `/universe tps` | Current server ticks per second. |
+
+## Related
+
+<CardGrid>
+<Card title="Minecraft overview" href="/docs/minecraft/overview">
+How the server and proxy layers fit together across a network.
+</Card>
+<Card title="Proxy plugins" href="/docs/minecraft/proxy-plugins">
+Let Velocity and BungeeCord auto-connect the servers these plugins register.
+</Card>
+<Card title="Plugin API" href="/docs/minecraft/api">
+Query and control instances from your own server-side plugin code.
+</Card>
+<Card title="Templates" href="/docs/configuration/templates">
+Build the file tree and variable replacements that bootstrap each server.
+</Card>
+</CardGrid>

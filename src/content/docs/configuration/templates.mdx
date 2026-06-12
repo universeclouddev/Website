@@ -1,0 +1,160 @@
+---
+title: Templates
+order: 3
+lead: 'Templates are reusable file trees under ./templates/<group>/<name>/. Universe copies the resolved set into an instance working directory, then replaces %VARIABLE% placeholders with live values before the runtime starts.'
+description: 'Template file trees under templates/group/name, the %VARIABLE% substitution system with built-in and custom keys, the copy-to-running flow, and cluster-wide template sync.'
+---
+
+A template is a directory of files that becomes the starting contents of an instance's working directory. Configurations reference templates by group and name; at deploy time the Wrapper copies the matching trees into `./running/<instance-id>/` and rewrites a chosen set of files with runtime values. This keeps the shared, version-controlled bits (a server JAR, a base config, plugins) separate from the per-instance bits (the allocated port, the node address) that can only be known when the instance is created.
+
+## Directory layout
+
+Templates live two levels deep: a **group** directory, then a **name** directory holding the actual files. The path `./templates/global/server/` has group `global` and name `server`.
+
+```text title="./templates/"
+templates/
+	global/
+		server/
+			server.jar
+			server.properties
+			plugins/
+	lobby/
+		default/
+			config/
+				proxy.yml
+			world/
+```
+
+Subdirectories, like `plugins/` and `world/` above, are copied recursively. Nothing about a file's contents matters to the copy step; only files later named in `fileModifications` are scanned for variables.
+
+## Binding templates to a configuration
+
+An instance configuration selects templates through `templateInstallationConfig`. Four selector lists decide what gets copied, and a flag decides what happens when two templates contain the same file.
+
+| Selector | Behaviour |
+| --- | --- |
+| `allOf` | Explicit template list. Each entry needs `name`, `group`, `storage`, and `priority`. |
+| `allInGroups` | Every template inside the named groups, each treated as `priority: 0`. |
+| `oneOf` | One template chosen at random from the listed candidates. |
+| `oneInGroups` | One template chosen at random per named group, across local and remote storage. |
+
+```json title="configuration/lobby.json (templates excerpt)"
+"templateInstallationConfig": {
+	"allOf": [
+		{ "name": "server", "group": "global", "storage": "local", "priority": 0 },
+		{ "name": "default", "group": "lobby", "storage": "local", "priority": 10 }
+	],
+	"allInGroups": [],
+	"oneOf": [],
+	"oneInGroups": [],
+	"onTemplatePasteOverridePresentFiles": false
+}
+```
+
+The `storage` key names where the template lives. `local` reads from `./templates/` on disk; storage extensions such as S3 add their own keys for templates pulled from a remote bucket.
+
+<Callout type="note">
+`onTemplatePasteOverridePresentFiles` controls overwrite order. When `false` (the default) higher-priority templates copy first and keep their files; when `true`, lower-priority templates copy first and are overwritten by higher-priority ones. Either way, `priority` sorts ascending.
+</Callout>
+
+## Variable substitution
+
+After the copy, the Wrapper scans every file named in the configuration's `fileModifications` and replaces `%VARIABLE%` tokens. A `server.properties` that defers its port and address to deploy time looks like this:
+
+```properties title="templates/global/server/server.properties"
+server-port=%PORT%
+server-ip=%NODE_ADDRESS%
+motd=%SERVER_MOTD%
+max-players=%MAX_PLAYERS%
+```
+
+Built-in variables resolved by the core providers:
+
+| Variable | Resolves to |
+| --- | --- |
+| `%PORT%` | Primary port allocated to the instance by `PortAllocator`. |
+| `%INSTANCE_ID%` | Six-character unique instance identifier. |
+| `%CONFIGURATION_NAME%` | The configuration's `name` field. |
+| `%RAM_MB%` | The configuration's `ramMB` reservation. |
+| `%INSTANCE_GROUPS%` | Semicolon-separated list of the configuration's instance groups. |
+| `%HOST_ADDRESS%` | The configuration's `hostAddress` value. |
+| `%NODE_ID%` | The hosting Wrapper's `nodeId`. |
+| `%NODE_ADDRESS%` | The hosting Wrapper's `address`. |
+| `%NODE_PORT%` | The hosting Wrapper's Hazelcast port. |
+| `%MASTER_ADDRESS%` / `%MASTER_IP%` | Master node address from `config.json`. |
+| `%MASTER_PORT%` | Master Hazelcast port. |
+| `%MASTER_API_PORT%` | Master REST API port. |
+
+Some extensions contribute their own variables, which only resolve when the extension is installed and the matching runtime is in use:
+
+| Extension | Variables |
+| --- | --- |
+| `runtime-k8s` | `%NAMESPACE%`, `%SERVICE_DNS%`, `%POD_NAME%` |
+| `tailscale` | `%TAILSCALE_IP%`, `%TAILSCALE_MAGIC_DNS%`, `%TAILSCALE_HOSTNAME%` |
+
+## Custom variables
+
+Beyond the built-ins, any key in a configuration's `properties` map or a node's `nodeSpecificVariables` becomes a `%KEY%` token. This is how per-service or per-node values reach a template file without hardcoding them into the tree.
+
+```json title="configuration/lobby.json (properties excerpt)"
+"properties": {
+	"SERVER_MOTD": "A Universe-managed lobby",
+	"MAX_PLAYERS": "100"
+}
+```
+
+With the `properties` above and `server.properties` listed in `fileModifications`, the `%SERVER_MOTD%` and `%MAX_PLAYERS%` tokens shown earlier resolve to `A Universe-managed lobby` and `100`.
+
+<Callout type="warning">
+A token is only replaced if its file is listed in `fileModifications`. An unlisted file is copied untouched, so a stray `%PORT%` in a file you forgot to register will reach the running instance literally.
+</Callout>
+
+## The copy-to-running flow
+
+<Steps>
+<Step title="Resolve">
+`TemplateManager` reads `templateInstallationConfig` and builds the ordered list of templates from `allOf`, `allInGroups`, `oneOf`, and `oneInGroups`, sorting by `priority`.
+</Step>
+<Step title="Copy">
+Each resolved tree is copied recursively from `./templates/<group>/<name>/` into `./running/<instance-id>/`. Remote templates are extracted directly into the same working directory.
+</Step>
+<Step title="Substitute">
+Every file named in `fileModifications` is scanned and its `%VARIABLE%` tokens are replaced with values from the built-in providers, extension providers, `properties`, and `nodeSpecificVariables`.
+</Step>
+<Step title="Start">
+The runtime launches the configuration's `command` inside the populated working directory. On a non-`static` instance the directory is cleaned up again when the instance stops.
+</Step>
+</Steps>
+
+## Sync across the cluster
+
+Templates only need to exist on a Wrapper that will host the instance. To distribute a tree you edited on the Master, push it over Hazelcast with a sync. The file tree is transferred to the target node's `./templates/` directory, which must be writable and share the same `clusterName`.
+
+```bash title="console / REST"
+# Push a template tree to another node over Hazelcast
+template sync global/server wrapper-2
+
+# Or dispatch the same sync over the REST API
+POST /api/templates/sync
+```
+
+<Callout type="tip">
+Pair template sync with `updateSources` in `config.json` to keep a shared artifact, a server JAR, current: the update source refreshes the file on one node, and a sync propagates it to the rest.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Instance configuration" href="/docs/configuration/instance-config">
+The `templateInstallationConfig`, `fileModifications`, and `properties` fields that drive templating.
+</Card>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+Node-specific variables and `updateSources` that feed into templates.
+</Card>
+<Card title="S3 storage" href="/docs/extensions/storage-s3">
+Serve templates from a remote bucket instead of local disk.
+</Card>
+<Card title="Templates API" href="/docs/api-reference/templates">
+List, inspect, and sync templates programmatically.
+</Card>
+</CardGrid>

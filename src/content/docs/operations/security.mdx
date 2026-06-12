@@ -1,0 +1,108 @@
+---
+title: Security
+order: 4
+lead: 'Bearer-token authentication, the ALL and PUBLIC scopes, rate limiting on public keys, the key lifecycle, and the infrastructure boundaries that matter most in production.'
+description: 'Universe security reference: bearer-token authentication, the ALL and PUBLIC permission scopes, rate limiting, key management, WebSocket auth, and production hardening.'
+---
+
+The REST API authenticates every request with a bearer token. Each token carries one of two scopes that decide what it can do, and public-scope tokens are rate limited. Tokens are created and revoked from the console, and the most important hardening work happens at the network boundary rather than in the application.
+
+## Authentication
+
+Send the token in the `Authorization` header on every request. Tokens are prefixed with `unv_`.
+
+```bash
+curl -H "Authorization: Bearer unv_your_token_here" \
+  http://localhost:7000/api/instances
+```
+
+<Callout type="note">
+Token lookups are cached in memory for 15 seconds. A deleted key can therefore remain valid for up to that window before the cache refreshes, so plan revocations with that lag in mind.
+</Callout>
+
+## Permission scopes
+
+Every key is created with one of two permission levels:
+
+- **`ALL`** grants complete administrative access to every endpoint, including instance lifecycle, configuration control, and command execution. It bypasses rate limiting entirely.
+- **`PUBLIC`** is restricted to read-only operations such as status, listing, and informational queries. Write and lifecycle calls return `401 Unauthorized`, and the key is rate limited.
+
+| Capability | `ALL` | `PUBLIC` |
+| --- | --- | --- |
+| Instance lifecycle (create, stop, kill, restart) | yes | no |
+| Instance queries and logs | yes | yes |
+| Configuration management | yes | no |
+| Template synchronization | yes | no |
+| Console commands | yes | no |
+| Rate limiting applied | no | yes (100 / 60s) |
+
+## Managing keys
+
+Keys are created, listed, and deleted from the console. The full token is shown exactly once at creation; afterward `key list` only ever displays a masked form.
+
+```bash title="console"
+# The full token prints once at creation, then never again.
+key create ci-pipeline ALL
+
+# List keys with masked tokens.
+key list
+
+# Revoke immediately when a system is decommissioned.
+key delete ci-pipeline
+```
+
+<Callout type="warning">
+Because the token cannot be retrieved after creation, store it immediately in a secrets manager or an environment variable. If it is lost, delete the key and issue a new one.
+</Callout>
+
+## Rate limiting
+
+`PUBLIC` keys are held to a sliding window of 100 calls per 60 seconds. Crossing the limit returns `HTTP 429` with the time to wait before retrying. `ALL` keys are never rate limited.
+
+```json title="429 response"
+HTTP 429 Too Many Requests
+{
+  "error": "Rate limit exceeded",
+  "message": "100 calls were already made during 1m",
+  "retryAfterMs": 42000
+}
+```
+
+## WebSocket authentication
+
+WebSocket endpoints, including the live-log stream, require the bearer token in the `Authorization` header during the HTTP upgrade handshake. Browser clients cannot set arbitrary WebSocket headers, so query-parameter tokens work only with a reverse proxy that rewrites the parameter into the header before forwarding the handshake.
+
+## Infrastructure hardening
+
+<Callout type="warning">
+The Hazelcast port (`6000` by default) grants full cluster membership to any process that connects. Never expose it to the public internet; restrict it at the firewall to internal Master and Wrapper traffic only.
+</Callout>
+
+When the Docker runtime is in use, the Universe process talks to `/var/run/docker.sock`. That access is equivalent to root on the host, so treat any key that can trigger Docker-backed deploys as a host-level credential. Consider a Docker socket proxy or a read-only mount to narrow which API calls are permitted.
+
+## Production recommendations
+
+- Issue one `ALL` key per automated system and rotate keys on a schedule.
+- Use separate `PUBLIC` keys for monitoring and dashboards so they stay rate limited.
+- Delete keys for decommissioned systems the moment they are retired.
+- Store tokens in a secrets manager, never in source control.
+- Keep Hazelcast traffic confined to Master and Wrapper links only.
+- Expose the REST API solely to trusted networks or behind an authenticated reverse proxy.
+- Restrict Docker socket access with a proxy or a read-only mount.
+
+## Related
+
+<CardGrid>
+<Card title="Console commands" href="/docs/operations/console-commands">
+The `key create`, `key list`, and `key delete` commands in context.
+</Card>
+<Card title="Networking" href="/docs/operations/networking">
+Firewall posture for the REST, Hazelcast, and instance ports.
+</Card>
+<Card title="Logging" href="/docs/operations/logging">
+Bearer auth on the log retrieval and live-log endpoints.
+</Card>
+<Card title="Authentication" href="/docs/api-reference/authentication">
+The auth model from the API reference side, with header details and error codes.
+</Card>
+</CardGrid>

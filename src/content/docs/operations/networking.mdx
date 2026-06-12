@@ -1,0 +1,127 @@
+---
+title: Networking
+order: 3
+lead: 'The two cluster-level ports, dynamic instance port allocation, how Wrappers reach the Master, the address variables for cross-node connectivity, and the firewall posture each role needs.'
+description: 'Universe networking reference: the REST and Hazelcast ports, dynamic instance port allocation, cross-node connectivity options, proxy routing, and firewall requirements.'
+---
+
+A Universe node opens two fixed ports for cluster operation and allocates a range of dynamic ports for the instances it hosts. The REST API on the Master is the only surface meant for external traffic; the Hazelcast cluster bus is strictly internal and grants full membership to anything that connects to it.
+
+## Ports
+
+| Service | Default | Configured by |
+| --- | --- | --- |
+| Ktor REST API | `7000` | `apiPort` in `config.json` (Master only) |
+| Hazelcast cluster bus | `6000` | `port` in `config.json` |
+| Instance range | `25565`-`25570` | `availablePorts` per configuration |
+
+The two cluster ports come from the node config:
+
+```json title="config.json"
+{
+  "port": 6000,
+  "apiPort": 7000
+}
+```
+
+Each instance configuration declares the range Universe scans when allocating a port:
+
+```json title="configuration/<name>.json"
+{
+  "availablePorts": { "min": 25565, "max": 25570 }
+}
+```
+
+<Callout type="warning">
+The Hazelcast port (`6000` by default) must never be exposed to the public internet. Any process that reaches it becomes a full cluster member. Keep it restricted to Master and Wrapper traffic on an internal network.
+</Callout>
+
+## Port allocation
+
+`PortAllocator` verifies a candidate port through three checks before committing, which prevents collisions across concurrent deploys and with services already on the machine:
+
+1. **Local memory check.** A `ConcurrentHashMap` tracks every port this JVM has already assigned this session.
+2. **Cluster-wide check.** The Hazelcast instances map is scanned for every `ONLINE` or `CREATING` instance, skipping their allocated ports.
+3. **OS-level probe.** A `ServerSocket` bind plus a TCP connect probe (100ms timeout) confirms nothing is listening.
+
+A port is treated as free only when the bind succeeds and the connect probe fails, meaning no active listener answered.
+
+## Cluster formation and topology
+
+Wrappers join by dialing the Master's Hazelcast address. In Docker that is the service name; on bare metal it is the Master's IP. Wrappers always initiate the outbound connection, so they do not need an inbound Hazelcast port of their own.
+
+<Mermaid title="port topology" chart={`
+flowchart TB
+  clients["Public clients"]
+  players["Players"]
+  subgraph master["Master node"]
+    rest["REST API :7000"]
+    hzm["Hazelcast :6000"]
+  end
+  subgraph wrapper["Wrapper node(s)"]
+    inst["instances :25565-25570"]
+  end
+  clients ==>|"TCP :7000 · REST"| master
+  wrapper -.->|"Hazelcast :6000 · outbound"| master
+  players ==>|"reach hostAddress"| inst
+  style master stroke:#7aa2f7,stroke-width:1.5px
+  style wrapper stroke:#7dcfff,stroke-width:1.5px
+`} />
+
+## Cross-node connectivity
+
+Each instance advertises a `hostAddress` that remote clients use to connect. The right value depends on how your nodes are networked, and several address variables are available for template substitution:
+
+| Option | How it resolves |
+| --- | --- |
+| Static IP | Assigned directly in the configuration's `hostAddress`. |
+| Tailscale mesh | `%TAILSCALE_IP%` gives an encrypted mesh address that works across datacenters. |
+| Kubernetes | `%SERVICE_DNS%` resolves to `universe-<id>.<namespace>.svc.cluster.local`. |
+| Public IP / NodePort | An external IP combined with a Kubernetes NodePort service. |
+
+Reference the variables wherever the instance writes its bind address:
+
+```properties title="server.properties"
+server-ip=%TAILSCALE_IP%
+service-host=%SERVICE_DNS%
+```
+
+## Proxy auto-connect
+
+The proxy plugin routes incoming players onto instances using a strategy set in `plugins/Universe/config.yml`:
+
+| Strategy | Behaviour |
+| --- | --- |
+| `LEAST_POPULATED` | Spreads players evenly across instances. |
+| `MOST_POPULATED` | Fills instances before opening new ones. |
+| `RANDOM` | Picks at random from the active pool. |
+
+Set `auto-connect: false` to disable automatic routing and implement your own selection logic.
+
+## Firewall requirements
+
+| Role | Inbound | Outbound |
+| --- | --- | --- |
+| Master | TCP `6000` (Hazelcast, internal) and `7000` (REST) | None required for cluster joins |
+| Wrapper | Allocated instance ports (for example `25565`-`25570`) | TCP `6000` to the Master |
+
+<Callout type="tip">
+Expose only the REST port externally, and only to trusted networks or behind an authenticated reverse proxy. Confine the Hazelcast port to Master and Wrapper traffic, and open instance ports just to the clients that need to reach those services.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Security" href="/docs/operations/security">
+Bearer tokens, scopes, and hardening the surfaces these ports expose.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+The Master and Wrapper topology and the Hazelcast task dispatch path.
+</Card>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+Every field in `config.json`, including `port` and `apiPort`.
+</Card>
+<Card title="Console commands" href="/docs/operations/console-commands">
+Cluster and node commands for inspecting membership and resources.
+</Card>
+</CardGrid>

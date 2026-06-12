@@ -1,0 +1,143 @@
+---
+import '../styles/global.css';
+import TitleBar from '../components/TitleBar.astro';
+import StatusBar from '../components/StatusBar.astro';
+import DocSidebar from '../components/docs/DocSidebar.astro';
+import DocPager from '../components/docs/DocPager.astro';
+import { getDocsNav, docCrumb, docNeighbors } from '../docs/nav';
+
+interface Props {
+	slug: string;
+	title: string;
+	description?: string;
+	lead?: string;
+	filePath?: string;
+}
+const { slug, title, description, lead, filePath } = Astro.props;
+
+const { folders, flat } = await getDocsNav();
+const crumb = docCrumb(flat, slug);
+const { prev, next } = docNeighbors(flat, slug);
+const path = filePath ?? crumb?.file ?? 'introduction.md';
+const fullPath = `docs/${path}`;
+const segments = fullPath.replace(/\.md$/, '').split('/');
+
+const metaTitle = `${title} · Universe docs`;
+const metaDesc =
+	description ?? lead ?? `${title}, documentation for the Universe orchestrator.`;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<title>{metaTitle}</title>
+		<meta name="description" content={metaDesc} />
+		<meta name="generator" content={Astro.generator} />
+		<meta property="og:title" content={metaTitle} />
+		<meta property="og:description" content={metaDesc} />
+		<meta property="og:type" content="article" />
+	</head>
+	<body>
+		<div class="w-full min-h-dvh bg-space-0">
+			<TitleBar />
+
+			<nav
+				class="sticky top-0 z-30 flex items-stretch bg-space-2 border-b border-line-1 overflow-x-auto"
+				aria-label="open file"
+			>
+				<span
+					class="u-tab is-active flex items-center gap-2 px-3.5 h-9 font-mono text-[12px] border-r border-line-1 whitespace-nowrap"
+				>
+					<span class="w-2 h-2 rounded-full shrink-0" style="background:var(--color-syn-blue)"></span>
+					{path}
+				</span>
+				<a
+					href="/api"
+					class="u-tab flex items-center gap-2 px-3.5 h-9 font-mono text-[12px] border-r border-line-1 whitespace-nowrap"
+				>
+					<span class="w-2 h-2 rounded-full shrink-0" style="background:var(--color-syn-aqua)"></span>
+					api reference ↗
+				</a>
+				<span class="flex-1 min-w-4 border-b border-line-1"></span>
+			</nav>
+
+			<div class="flex items-start">
+				<DocSidebar current={slug} folders={folders} total={flat.length} />
+
+				<main class="flex-1 min-w-0 px-4 sm:px-8 pt-7 pb-24">
+					<details class="min-[900px]:hidden mb-6 rounded-[var(--radius-3)] border border-line-1 bg-space-1">
+						<summary
+							class="flex items-center gap-2 px-4 py-2.5 font-mono text-[12px] text-fg-2 cursor-pointer list-none"
+						>
+							<span class="text-syn-blue">▸</span> browse docs
+						</summary>
+						<div class="px-3 pb-3 font-mono text-[12px] leading-[1.9]">
+							{
+								folders.map((folder) => (
+									<div class="mt-1.5">
+										{folder.dir && (
+											<div class="text-fg-3/80 text-[11px] px-1">{folder.label}</div>
+										)}
+										{folder.links.map((l) => (
+											<a
+												href={l.href}
+												class:list={[
+													'block px-2 py-0.5 rounded-[var(--radius-2)] hover:bg-space-3',
+													l.href === slug ? 'text-fg-1' : 'text-fg-2'
+												]}
+											>
+												{l.file}
+											</a>
+										))}
+									</div>
+								))
+							}
+						</div>
+					</details>
+
+					<article class="mx-auto max-w-[880px]">
+						<header class="mb-8">
+							<div class="font-mono text-[11px] text-fg-3 mb-3 flex items-center gap-1.5 flex-wrap">
+								{
+									segments.map((s, i) => (
+										<>
+											{i > 0 && <span class="text-fg-3/50">/</span>}
+											<span class={i === segments.length - 1 ? 'text-fg-2' : ''}>{s}</span>
+										</>
+									))
+								}
+							</div>
+							<h1
+								class="font-mono font-extrabold tracking-tight text-[clamp(24px,3.4vw,34px)] text-fg-1 leading-[1.15]"
+							>
+								{title}
+							</h1>
+							{
+								lead && (
+									<p class="mt-3.5 text-fg-3 text-[15px] leading-relaxed max-w-[72ch]">{lead}</p>
+								)
+							}
+						</header>
+
+						<div class="doc-prose">
+							<slot />
+						</div>
+
+						<DocPager prev={prev} next={next} />
+					</article>
+				</main>
+			</div>
+		</div>
+		<StatusBar file={fullPath} />
+
+		<script>
+			import { initIde } from '../scripts/ide';
+			import { initDocs } from '../scripts/docs';
+			initIde();
+			initDocs();
+		</script>
+	</body>
+</html>

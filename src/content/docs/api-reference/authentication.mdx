@@ -1,0 +1,112 @@
+---
+title: Authentication
+order: 2
+lead: 'Universe authenticates every protected request with a bearer token passed in the Authorization header. Tokens carry one of two permission levels, ALL or PUBLIC, which decide endpoint access and rate limiting.'
+description: 'Bearer-token authentication for the Universe API: the Authorization header, the ALL and PUBLIC permission levels, rate limiting, and 401 behavior.'
+---
+
+The API uses bearer-token authentication. Each request to a protected endpoint must include a valid token in the `Authorization` header. Tokens are created and managed through the console, and each token is bound to a single permission level that governs what it may do.
+
+## The Authorization header
+
+Send the token with the `Bearer` scheme on every protected request:
+
+```http title="header"
+Authorization: Bearer YOUR_TOKEN
+```
+
+A complete request looks like this:
+
+```bash
+curl http://<master>:7000/api/instances \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+<Callout type="info">
+Only `GET /api/ping` and `GET /api/metrics` are unauthenticated. Every other endpoint, including all WebSocket handshakes, requires a token.
+</Callout>
+
+## Permission levels
+
+Tokens carry one of two scopes:
+
+| Scope | Access | Rate limit |
+| --- | --- | --- |
+| `ALL` | Full admin access to every endpoint: instance management, configuration changes, template edits, command execution, and log retrieval. | Exempt. Admin keys bypass rate limiting entirely. |
+| `PUBLIC` | Read-only access to public endpoints. No instance endpoint is public, so instance operations are unavailable to public keys. | Limited to 100 calls per 60 seconds by default. |
+
+<Callout type="warning">
+Every instance endpoint, including `GET /api/instances`, `GET /api/instances/{id}`, and the log routes, requires `ALL` permission. A `PUBLIC` key cannot reach them.
+</Callout>
+
+## Generating tokens
+
+Create keys from the Master console (or over REST via the [Commands API](/docs/api-reference/commands)) with the `key create` command, passing a label and the desired permission level:
+
+```bash title="console"
+# Create an admin key with full access
+key create my-admin-key ALL
+
+# Create a read-only public key
+key create dashboard PUBLIC
+```
+
+## Failure responses
+
+A missing, malformed, or invalid token returns `401 Unauthorized` with an `error` field:
+
+```json title="401 Unauthorized"
+{
+  "error": "Unauthorized"
+}
+```
+
+A `PUBLIC` key that exceeds its rate window returns `429 Too Many Requests` with the retry delay in milliseconds:
+
+```json title="429 Too Many Requests"
+{
+  "error": "Rate limit exceeded. Retry after 45000ms.",
+  "retryAfterMs": 45000
+}
+```
+
+<Callout type="note">
+Reaching an endpoint that is out of scope for your token (for example a public key calling an instance route) is rejected at the authorization layer. Treat a `401` on an instance route as a sign the token lacks `ALL` permission.
+</Callout>
+
+## Authenticating WebSockets
+
+WebSocket endpoints use the same bearer token, supplied as an `Authorization` header during the HTTP upgrade handshake. The token is validated before the connection is established.
+
+<Tabs tabs={['handshake', 'note']}>
+<Fragment slot="0">
+
+```http title="upgrade request"
+GET /api/instances/a1b2c3/live-log HTTP/1.1
+Host: <master>:7000
+Upgrade: websocket
+Connection: Upgrade
+Authorization: Bearer YOUR_TOKEN
+```
+
+</Fragment>
+<Fragment slot="1">
+
+If your WebSocket client cannot set custom headers on the handshake, terminate the socket behind a proxy that injects the `Authorization` header. See the [WebSockets](/docs/api-reference/websockets) page for the live-log and console endpoints.
+
+</Fragment>
+</Tabs>
+
+## Related
+
+<CardGrid>
+<Card title="API overview" href="/docs/api-reference/overview">
+Base URL, response conventions, error format, and the resource-group map.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+Run `key create` and other console commands over REST.
+</Card>
+<Card title="WebSockets" href="/docs/api-reference/websockets">
+Authenticated live-log and interactive console sockets.
+</Card>
+</CardGrid>

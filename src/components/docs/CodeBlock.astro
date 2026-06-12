@@ -1,0 +1,20 @@
+---
+import { Code } from 'astro:components';
+
+interface Props {
+	code: string;
+	lang?: string;
+	title?: string;
+}
+const { code, lang = 'bash', title } = Astro.props;
+const label = title ?? lang;
+---
+
+<div class="doc-code">
+	<div class="doc-code-bar">
+		<span class="w-2 h-2 rounded-full" style="background:var(--color-syn-green)"></span>
+		<span>{label}</span>
+		<button type="button" class="doc-copy" data-copy={code} aria-label="copy code">copy</button>
+	</div>
+	<Code code={code} lang={lang as any} theme="tokyo-night" />
+</div>

@@ -1,0 +1,186 @@
+---
+title: Node API
+order: 7
+lead: 'Inspect the node serving the request: an unauthenticated health check, runtime statistics and uptime, the active main configuration, and a configuration reload trigger.'
+description: 'Reference for the Universe node endpoints: the unauthenticated ping health check, node statistics and uptime, the main configuration, and the reload trigger.'
+---
+
+The node endpoints report on the single node that handles the request, normally the Master. They cover a lightweight health probe, live system statistics, and the node's own configuration. The health check is the only endpoint in the whole API, alongside metrics, that needs no token.
+
+## Health check
+
+```http title="endpoint"
+GET /api/ping
+```
+
+Returns basic status and identity for the node. This endpoint is unauthenticated, making it suitable for liveness and readiness probes.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/ping
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "status": "ok",
+  "nodeId": "node-1",
+  "clusterName": "universe-cluster",
+  "master": true
+}
+```
+
+</Fragment>
+</Tabs>
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `status` | string | Always `ok` when the node is serving. |
+| `nodeId` | string | Identifier of the responding node. |
+| `clusterName` | string | Hazelcast cluster name the node belongs to. |
+| `master` | boolean | Whether the node runs as the Master. |
+
+<Callout type="tip">
+Point container or load-balancer health checks at `/api/ping`. It does not require a token and never touches the cluster scheduler.
+</Callout>
+
+## Node information
+
+```http title="endpoint"
+GET /api/node
+```
+
+Returns the node ID, a human-readable uptime string, and a block of system statistics.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/node \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "nodeId": "node-1",
+  "uptime": "2h 14m 06s",
+  "systemStats": {
+    "cpuLoad": 0.32,
+    "usedMemoryMB": 4096,
+    "totalMemoryMB": 16384
+  }
+}
+```
+
+</Fragment>
+</Tabs>
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `nodeId` | string | Identifier of the responding node. |
+| `uptime` | string | How long the node process has been running. |
+| `systemStats` | object | Runtime statistics for the node, such as CPU load and memory usage. |
+
+## Node configuration
+
+```http title="endpoint"
+GET /api/node/config
+```
+
+Returns the node's active main configuration, the same fields written to `config.json` on disk. Use this to confirm cluster membership, role, and port settings without shell access to the host.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/node/config \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "address": "127.0.0.1",
+  "port": 6000,
+  "apiPort": 7000,
+  "nodeId": "node-1",
+  "clusterName": "universe-cluster",
+  "isMasterNode": true,
+  "masterAddress": "127.0.0.1",
+  "masterPort": 6000,
+  "masterApiPort": 7000,
+  "debug": false,
+  "maxRamMB": 16384,
+  "maxCpu": 800
+}
+```
+
+</Fragment>
+</Tabs>
+
+| Field | Description |
+| --- | --- |
+| `address` | Address this node advertises to the cluster. |
+| `port` | Hazelcast cluster port (default `6000`). |
+| `apiPort` | REST API port (default `7000`). |
+| `nodeId` | Unique node identifier. |
+| `clusterName` | Hazelcast cluster name shared by every member. |
+| `isMasterNode` | Whether the node runs the API and owns state. |
+| `masterAddress` / `masterPort` / `masterApiPort` | Coordinates of the Master used to join the cluster. |
+| `debug` | Whether verbose logging is enabled. |
+| `maxRamMB` / `maxCpu` | Capacity limits the scheduler honors when placing instances. |
+
+## Reload configuration
+
+```http title="endpoint"
+POST /api/node/reload
+```
+
+Triggers a reload of the node configuration from disk. This endpoint is defined but not yet fully implemented; it currently returns `501 Not Implemented`.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/node/reload \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="501 Not Implemented"
+{
+  "error": "Not Implemented"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+To reload instance configurations at runtime today, use the `config reload` console command via the [Commands API](/docs/api-reference/commands).
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Cluster API" href="/docs/api-reference/cluster">
+Enumerate all nodes in the cluster and dispatch remote commands.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+Run console commands such as `config reload` over REST.
+</Card>
+<Card title="API overview" href="/docs/api-reference/overview">
+Base URL, auth model, and response conventions.
+</Card>
+</CardGrid>

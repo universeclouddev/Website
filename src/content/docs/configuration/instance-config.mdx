@@ -1,0 +1,132 @@
+---
+title: Instance configuration
+order: 2
+lead: 'A configuration file under ./configuration/ defines one deployable service: the command to run, the runtime that runs it, the ports it claims, how many copies Universe keeps alive, and the templates copied into its working directory.'
+description: 'Define a deployable service in Universe: runtime selection, command, port ranges, minimumServiceCount scaling, template binding, environment variables, and custom properties.'
+---
+
+Instance configurations live in `./configuration/` as JSON files, one per service. The Master loads them into the Hazelcast configurations map at startup, and the filename (minus `.json`) must equal the `name` field inside. A configuration is a template for instances, not an instance itself: you create running instances from it by name through the REST API or console, and Universe decides which Wrapper hosts each one.
+
+## Anatomy of a configuration
+
+A complete example for a Minecraft lobby that Universe keeps two copies of, spread across two Wrappers:
+
+```json title="configuration/lobby.json"
+{
+	"name": "lobby",
+	"runtime": "screen",
+	"command": "java -Xmx2G -jar server.jar nogui",
+	"static": false,
+	"ramMB": 2048,
+	"cpu": 100,
+	"nodes": ["wrapper-1", "wrapper-2"],
+	"hostAddress": "%NODE_ADDRESS%",
+	"availablePorts": { "min": 25565, "max": 25600 },
+	"additionalPorts": [
+		{ "name": "query", "port": 25565, "protocol": "UDP" }
+	],
+	"minimumServiceCount": 2,
+	"instanceGroups": ["lobby"],
+	"environmentVariables": {
+		"INSTANCE_PORT": "%PORT%",
+		"PROXY_SECRET": "shared-velocity-secret"
+	},
+	"templateInstallationConfig": {
+		"allOf": [
+			{ "name": "server", "group": "global", "storage": "local", "priority": 0 },
+			{ "name": "default", "group": "lobby", "storage": "local", "priority": 10 }
+		],
+		"allInGroups": [],
+		"oneOf": [],
+		"oneInGroups": [],
+		"onTemplatePasteOverridePresentFiles": false
+	},
+	"fileModifications": ["server.properties", "config/proxy.yml"],
+	"properties": {
+		"SERVER_MOTD": "A Universe-managed lobby",
+		"MAX_PLAYERS": "100"
+	}
+}
+```
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| name | string | required | Unique configuration identifier. Must match the filename. |
+| runtime | string | `screen` | Runtime provider key. Built in: `screen`, `tmux`, `process`. Extensions add `docker` and `k8s`. |
+| command | string | required | Shell command run inside the instance working directory. Not scanned for template variables. |
+| static | boolean | `false` | `true` keeps the working directory between restarts instead of cleaning it up on stop. |
+| ramMB | int | `2048` | Memory reservation per instance, in megabytes. Counts against the node's `maxRamMB`. |
+| cpu | int | `100` | CPU reservation per instance, where `100` equals one physical core. |
+| nodes | array | required | List of `nodeId` values eligible to host this configuration. |
+| hostAddress | string | `127.0.0.1` | Address advertised to clients connecting to instances. Supports template variables such as `%NODE_ADDRESS%`. |
+| availablePorts | object | required | Inclusive `min`/`max` range the `PortAllocator` scans for the primary instance port. |
+| additionalPorts | array | `[]` | Extra fixed ports with `name`, `port`, and `protocol` (`TCP`/`UDP`). |
+| minimumServiceCount | int | `1` | Target running count the `InstanceCountEnforcer` maintains. |
+| instanceGroups | array | `[]` | Logical group names used for proxy routing and manifest export. |
+| environmentVariables | object | `{}` | Environment variables passed to the process. Values support built-in template variables. |
+| templateInstallationConfig | object | required | Controls which templates are copied and in what order. See Templates. |
+| fileModifications | array | `[]` | File paths scanned for `%VARIABLE%` replacement after the template copy. |
+| properties | object | `{}` | Custom key/value pairs exposed as `%KEY%` template variables. |
+
+<Callout type="warning">
+The `command` string runs verbatim and is **not** scanned for `%VARIABLE%` placeholders. To pass the allocated port into a process, surface it through `environmentVariables` (for example `"INSTANCE_PORT": "%PORT%"`) or write it into a config file listed in `fileModifications`.
+</Callout>
+
+## Scaling with minimumServiceCount
+
+On the Master, `InstanceCountEnforcer` compares the live instance count for each configuration against its `minimumServiceCount`. When the count falls short, whether from a fresh start, a deliberate stop, or a Wrapper going `OFFLINE`, it dispatches new deploy tasks to bring the service back to target. Set it to `0` for a configuration you only ever start manually, or to a higher number for a pool that should always be warm.
+
+Each new instance is placed on an eligible node from `nodes` that has live Hazelcast membership and enough headroom under its `maxRamMB` and `maxCpu` caps to fit the configuration's `ramMB` and `cpu` reservation.
+
+<Callout type="note">
+`minimumServiceCount` is a floor, not a fixed size. You can create instances above the minimum by hand; the enforcer only ever adds instances to reach the floor, it does not stop extras.
+</Callout>
+
+## Runtime selection
+
+The `runtime` key resolves to a `RuntimeProvider` in the Wrapper's `RuntimeRegistry`. The three built-in providers ship in the core JAR; the rest are contributed by extensions and must be installed on the target Wrapper before an instance using them deploys.
+
+| Key | Source | Mechanism |
+| --- | --- | --- |
+| `screen` | built in | `screen -dmS` session, stdin via `screen -X stuff`. |
+| `tmux` | built in | `tmux new-session -d`, stdin via `tmux send-keys`. |
+| `process` | built in | Direct `ProcessBuilder`, no session manager. |
+| `docker` | extension | Per-instance container via `runtime-docker`. |
+| `k8s` | extension | Pod per instance via `runtime-k8s`. |
+
+## Ports
+
+Every instance gets one primary port, chosen from `availablePorts` by the `PortAllocator` and exposed to templates as `%PORT%`. Services that need fixed side channels, an RCON port or a UDP query port, declare them in `additionalPorts` with an explicit number and protocol.
+
+```json title="configuration/lobby.json (ports excerpt)"
+"availablePorts": { "min": 25565, "max": 25600 },
+"additionalPorts": [
+	{ "name": "rcon", "port": 25575, "protocol": "TCP" },
+	{ "name": "query", "port": 25565, "protocol": "UDP" }
+]
+```
+
+<Callout type="tip">
+The allocator avoids ports already claimed by other instances cluster-wide and probes the host OS before committing, so overlapping `availablePorts` ranges across configurations on the same node are safe. See the port allocation strategy in the architecture reference.
+</Callout>
+
+## Reloading at runtime
+
+Configurations are editable without restarting the Master. Run `config reload` in the console, or call `POST /api/node/reload`, to re-read `./configuration/` into the Hazelcast map. The CRUD endpoints under `/api/configurations` let tooling create, update, and delete configurations over HTTP, writing the JSON files back to disk.
+
+## Related
+
+<CardGrid>
+<Card title="Templates" href="/docs/configuration/templates">
+Build the file trees referenced by `templateInstallationConfig` and how variables resolve.
+</Card>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+Set the `nodeId` values that `nodes` targets and the per-node resource caps.
+</Card>
+<Card title="Runtimes" href="/docs/runtimes/overview">
+What each `runtime` key does and how to add Docker or Kubernetes.
+</Card>
+<Card title="Configurations API" href="/docs/api-reference/configurations">
+Create, update, and delete configurations over the REST API.
+</Card>
+</CardGrid>

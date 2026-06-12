@@ -1,0 +1,22 @@
+---
+interface Props {
+	type?: 'note' | 'tip' | 'warning' | 'info';
+}
+const { type = 'note' } = Astro.props;
+
+const MAP = {
+	note: { color: 'var(--color-accent)', label: 'note', glyph: 'i' },
+	tip: { color: 'var(--color-syn-green)', label: 'tip', glyph: '✦' },
+	warning: { color: 'var(--color-syn-orange)', label: 'warning', glyph: '!' },
+	info: { color: 'var(--color-syn-aqua)', label: 'info', glyph: 'i' }
+} as const;
+const v = MAP[type];
+---
+
+<div class="doc-callout" style={`border-left-color:${v.color}`}>
+	<span class="doc-callout-icon" style={`color:${v.color}`}>{v.glyph}</span>
+	<div class="doc-callout-body">
+		<span class="doc-callout-label" style={`color:${v.color}`}>{v.label}</span>
+		<slot />
+	</div>
+</div>

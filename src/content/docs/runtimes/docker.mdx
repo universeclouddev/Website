@@ -1,0 +1,159 @@
+---
+title: Docker runtime
+order: 3
+lead: 'The runtime-docker extension spawns each instance as a sibling Docker container using Docker out of Docker, talking to the host daemon through a mounted socket. You get filesystem and network isolation plus real-time log streaming, at the cost of getting hostDataPath right.'
+description: 'Run Universe instances as isolated Docker containers with the runtime-docker extension: image selection, port mapping, volumes, the hostDataPath mapping, and stop limits.'
+---
+
+The `runtime-docker` extension lets a Wrapper deploy instances as isolated Docker containers instead of local processes. The containers are **siblings**, not nested: the extension speaks to the host's Docker daemon over a mounted Unix socket and asks it to create each instance container next to the Universe container. That is the Docker-out-of-Docker model, and it is why the socket mount and the `hostDataPath` mapping matter so much.
+
+## How a deploy runs
+
+1. Template files are copied into `./running/<instanceId>/` inside the Universe container.
+2. The instance configuration is translated into Docker API calls specifying image, ports, volumes, and environment.
+3. The container starts and the extension polls the Docker API until it reaches the running state.
+4. Command execution runs through `docker exec` inside the container.
+5. Shutdown invokes `docker stop` with the configured timeout, then optionally removes the container.
+
+<Callout type="info">
+Because logs come straight from the container's stdout and stderr over the Docker logs API, this runtime supports both the REST log endpoint and the live WebSocket stream. That is the real-time output the session runtimes cannot provide.
+</Callout>
+
+## Setup
+
+<Steps>
+<Step title="Install the extension JAR">
+Drop `runtime-docker-<version>.jar` into `./extensions/`. Universe scans that directory on startup and registers the `docker` runtime through the extension's `onLoad()` hook.
+</Step>
+
+<Step title="Mount the Docker socket">
+Give the Universe container access to the host daemon by mounting the socket in your Compose file alongside the data volume:
+
+```yaml title="docker-compose.yml"
+services:
+	universe-master:
+		image: git.lunarlabs.dev/scala/universe:latest
+		container_name: universe-master
+		stdin_open: true
+		tty: true
+		ports:
+			- "7000:7000"
+			- "6000:6000"
+		volumes:
+			- ./data:/data
+			- /var/run/docker.sock:/var/run/docker.sock
+```
+
+</Step>
+
+<Step title="Set hostDataPath">
+This is the field to get right. When Universe runs inside Docker, an internal path like `/data/running/abc123/` does not exist on the host filesystem, yet the host daemon is what mounts it into the new container. `hostDataPath` maps the container's data directory back to its real host location.
+
+<Callout type="warning">
+If the Compose file lives at `/opt/universe/docker-compose.yml` and mounts `./data:/data`, set `hostDataPath` to `/opt/universe/data`. A wrong value makes containers exit immediately, because their working directory binds to a path the host daemon cannot resolve.
+</Callout>
+</Step>
+
+<Step title="Write the extension config">
+Create `./extensions/docker/config.json`:
+
+```json title="extensions/docker/config.json"
+{
+	"factoryName": "docker",
+	"hostDataPath": "/opt/universe/data",
+	"network": "host",
+	"javaImage": {
+		"repository": "azul-zulu",
+		"tag": "25-jdk-alpine"
+	},
+	"autoRemove": true,
+	"stopTimeout": 30,
+	"volumes": [],
+	"binds": [],
+	"exposedPorts": []
+}
+```
+
+</Step>
+
+<Step title="Declare the runtime">
+Point the instance configuration at the `docker` runtime:
+
+```json title="configuration/default.json"
+{
+	"name": "default",
+	"runtime": "docker",
+	"command": "java -jar server.jar",
+	"availablePorts": { "min": 25565, "max": 25570 }
+}
+```
+
+</Step>
+</Steps>
+
+## Configuration reference
+
+| Field | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `factoryName` | string | `"docker"` | Runtime key matched against the configuration's `runtime`. |
+| `hostDataPath` | string | null | Host path the data directory maps to. Required when Universe is containerized. |
+| `network` | string | `"host"` | Docker network mode for spawned containers. |
+| `javaImage.repository` | string | `"azul-zulu"` | Default image repository. |
+| `javaImage.tag` | string | `"25-jdk-alpine"` | Default image tag. |
+| `autoRemove` | boolean | true | Remove the container automatically on exit. |
+| `stopTimeout` | int | 30 | Graceful shutdown timeout, in seconds. |
+| `volumes` | array | [] | Structured bind mounts. |
+| `binds` | array | [] | Raw `host:container` bind strings. |
+| `exposedPorts` | array | [] | Extra ports beyond the allocated instance port. |
+
+## Image selection
+
+The `javaImage` setting in `config.json` is the global default for every instance. To override it per instance, set the `CUSTOM_IMAGE` environment variable in the instance configuration. It accepts the full `registry/org/image:tag` form and takes precedence over the global default.
+
+```json title="per-instance override"
+{
+	"environmentVariables": {
+		"CUSTOM_IMAGE": "myregistry.com/org/custom-java:21"
+	}
+}
+```
+
+## Ports and volumes
+
+The `network` field accepts `"host"`, `"bridge"`, or a named network. The allocated instance port is always wired up, declare any additional ports through `exposedPorts` with a `containerPort` and `protocol`. Volumes come in two flavours: structured objects under `volumes` with `hostPath`, `containerPath`, and an optional `readOnly`, or raw Docker strings under `binds`, where a `:ro` suffix marks a mount read-only.
+
+```json title="volumes, binds, exposedPorts"
+{
+	"volumes": [
+		{ "hostPath": "/opt/universe/shared", "containerPath": "/shared", "readOnly": true }
+	],
+	"binds": [
+		"/opt/universe/cache:/cache",
+		"/opt/universe/maps:/maps:ro"
+	],
+	"exposedPorts": [
+		{ "containerPort": 9090, "protocol": "tcp" }
+	]
+}
+```
+
+<Callout type="warning">
+Mounting the Docker socket grants full control over the host's Docker daemon, including the ability to start, stop, and inspect every container on the machine. Restrict this runtime to trusted, controlled environments and never expose the Universe REST API publicly while it has socket access.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Runtimes overview" href="/docs/runtimes/overview">
+Where the `docker` runtime fits among the built-in and extension providers.
+</Card>
+<Card title="Kubernetes runtime" href="/docs/runtimes/kubernetes">
+Scale past a single host by spawning instances as Pods on a cluster.
+</Card>
+<Card title="Screen & tmux" href="/docs/runtimes/screen-tmux">
+The zero-setup local runtimes for development and bare metal.
+</Card>
+<Card title="Extensions" href="/docs/extensions/overview">
+How the `runtime-docker` extension loads and registers its provider.
+</Card>
+</CardGrid>

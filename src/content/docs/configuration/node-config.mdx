@@ -1,0 +1,161 @@
+---
+title: Node configuration
+order: 1
+lead: 'config.json sets a node identity, its place in the Hazelcast cluster, and the single flag (isMasterNode) that decides whether it runs the REST API as a Master or joins as a task-executing Wrapper.'
+description: 'Every field in config.json: address, port, apiPort, nodeId, clusterName, isMasterNode, master coordinates, resource caps, and how a node picks the Master or Wrapper role.'
+---
+
+Universe reads `./config.json` from its working directory at startup. The file is generated on first run with sensible single-machine defaults, then you edit it and restart. It holds three things: who this node is on the cluster, where the Master lives, and the resource ceiling the node is willing to give to running instances. Both node roles boot from the same fat JAR, so this file is the only thing that distinguishes a Master from a Wrapper.
+
+## Field reference
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| address | string | `127.0.0.1` | IP this node advertises to the Hazelcast cluster. Also the default for `bindAddress` and `publicAddress`. |
+| port | int | `6000` | Hazelcast member communication port. Every node opens this for cluster traffic. |
+| apiPort | int | `7000` | Ktor REST API port. Bound only when `isMasterNode: true`; ignored on Wrappers. |
+| nodeId | string | `node-1` | Unique node identifier. Used in instance assignment, template sync targeting, and logs. |
+| clusterName | string | `universe-cluster` | Hazelcast group name. Every member of one cluster must share this exact value. |
+| isMasterNode | boolean | `true` | Role selector. `true` starts the REST API and `InstanceCountEnforcer`; `false` joins as a Wrapper. |
+| masterAddress | string | `127.0.0.1` | Hostname or IP of the Master, used by Wrappers to find and join the cluster. |
+| masterPort | int | `6000` | Hazelcast port on the Master. |
+| masterApiPort | int | `7000` | REST API port on the Master, surfaced to clients such as Minecraft plugins as the `%MASTER_API_PORT%` variable. |
+| maxRamMB | int | `8192` | Memory ceiling, in megabytes, that this node will commit across all instances it hosts. |
+| maxCpu | int | `400` | CPU ceiling in units, where `100` equals one physical core. |
+| bindAddress | string | = `address` | Socket bind address. Set to `0.0.0.0` in containers so the member listens on every interface. |
+| publicAddress | string | = `address` | Address advertised to other cluster members when it differs from the bind address (NAT, Docker). |
+| nodeSpecificVariables | object | `{}` | Key/value pairs exposed to templates on this node. Resolved as `%KEY%` placeholders during deploy. |
+| updateSources | array | `[]` | Auto-update definitions that fetch remote files into the working tree on an interval. |
+| debug | boolean | `false` | `true` enables `DEBUG` console and `INFO` framework logging; otherwise `WARN` and above only. |
+
+<Callout type="note">
+The `apiPort`, `masterApiPort`, and resource caps all have working defaults. A fresh single-machine install only needs you to confirm `isMasterNode` and, on a Wrapper, point `masterAddress` at the Master.
+</Callout>
+
+## Master and Wrapper roles
+
+`isMasterNode` is the one field that changes behaviour at startup. A Master owns all authoritative state and is the only node that binds the REST API; a Wrapper owns nothing persistently and exists to execute tasks the Master dispatches over Hazelcast.
+
+|  | Master (`isMasterNode: true`) | Wrapper (`isMasterNode: false`) |
+| --- | --- | --- |
+| REST API | Bound on `apiPort` | Not bound; `apiPort` ignored |
+| Hazelcast | Forms the cluster on `port` | Joins via `masterAddress:masterPort` |
+| State | Loads configurations, runs `InstanceCountEnforcer` | Listens for tasks on `IExecutorService` |
+| Runtimes | Can also host instances locally | Registers runtime providers and starts processes |
+
+A Master may point `masterAddress` and `masterPort` at itself, which is what the generated single-machine config does. A Wrapper must use the *identical* `clusterName` as the Master, otherwise Hazelcast treats it as a separate cluster and it silently fails to join.
+
+<Tabs tabs={['Master config.json', 'Wrapper config.json']}>
+<Fragment slot="0">
+
+A Master forms the cluster and serves the API. Note `masterAddress` points back at the node's own `address`.
+
+```json title="config.json (Master)"
+{
+	"address": "10.0.0.10",
+	"port": 6000,
+	"apiPort": 7000,
+	"nodeId": "master-1",
+	"clusterName": "universe-cluster",
+	"isMasterNode": true,
+	"masterAddress": "10.0.0.10",
+	"masterPort": 6000,
+	"masterApiPort": 7000,
+	"maxRamMB": 8192,
+	"maxCpu": 400,
+	"nodeSpecificVariables": { "region": "us-east-1" },
+	"debug": false
+}
+```
+
+</Fragment>
+<Fragment slot="1">
+
+A Wrapper sets `isMasterNode: false` and aims `masterAddress` / `masterPort` at the Master. Its own `address` and `nodeId` stay unique. The larger `maxRamMB` and `maxCpu` here reflect a dedicated host that does nothing but run instances.
+
+```json title="config.json (Wrapper)"
+{
+	"address": "10.0.0.21",
+	"port": 6000,
+	"apiPort": 7000,
+	"nodeId": "wrapper-1",
+	"clusterName": "universe-cluster",
+	"isMasterNode": false,
+	"masterAddress": "10.0.0.10",
+	"masterPort": 6000,
+	"masterApiPort": 7000,
+	"maxRamMB": 16384,
+	"maxCpu": 800,
+	"nodeSpecificVariables": { "region": "us-east-1" },
+	"debug": false
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="warning">
+A mismatched `clusterName` is the most common reason a Wrapper never shows up in `GET /api/cluster/nodes`. The two nodes can reach each other on the network and still refuse to merge if the group names differ by a single character.
+</Callout>
+
+## Binding inside containers
+
+Inside Docker or any NAT environment the address a member binds to is not the address other members can reach it on. Split the two: bind to `0.0.0.0` so the socket listens on every interface, and advertise the routable host address through `publicAddress`.
+
+```json title="config.json (containerised Master)"
+{
+	"address": "10.0.0.10",
+	"bindAddress": "0.0.0.0",
+	"publicAddress": "10.0.0.10",
+	"isMasterNode": true
+}
+```
+
+## Auto-update sources
+
+Each entry in `updateSources` polls a remote URL and writes the result into the working tree on an interval. This keeps a server JAR or shared asset current across the cluster without a manual redeploy. An optional `hashUrl` verifies the download before it replaces the existing file, and `syncToStorage` can push the fetched file into a configured storage provider.
+
+| Sub-field | Type | Default | Description |
+| --- | --- | --- | --- |
+| url | string | required | Remote file to fetch. |
+| targetPath | string | required | Destination path relative to the working directory. |
+| hashUrl | string · null | `null` | Optional checksum URL used to verify the download. |
+| intervalMs | int | `60000` | Polling interval in milliseconds. |
+| enabled | boolean | `true` | Toggles the source without removing it. |
+| syncToStorage | string · null | `null` | Storage provider key to upload the fetched file into. |
+
+```json title="config.json (updateSources excerpt)"
+{
+	"updateSources": [
+		{
+			"url": "https://files.example.com/paper-1.21.jar",
+			"targetPath": "templates/global/server/server.jar",
+			"hashUrl": "https://files.example.com/paper-1.21.jar.sha256",
+			"intervalMs": 60000,
+			"enabled": true,
+			"syncToStorage": null
+		}
+	]
+}
+```
+
+<Callout type="tip">
+Changes to `config.json` apply on restart. Configuration files under `./configuration/` can be reloaded live with `config reload` or `POST /api/node/reload`, but node identity and role are read once at boot.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Instance configuration" href="/docs/configuration/instance-config">
+Define a deployable service, its runtime, ports, scaling, and template bindings.
+</Card>
+<Card title="Templates" href="/docs/configuration/templates">
+File trees and `%VARIABLE%` substitution, including `%NODE_ID%` and node-specific variables.
+</Card>
+<Card title="Database" href="/docs/configuration/database">
+The companion `database.json` file and the backends Universe persists state to.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+How the Master and Wrapper roles split work across the Hazelcast cluster.
+</Card>
+</CardGrid>

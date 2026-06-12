@@ -1,0 +1,111 @@
+---
+title: S3 storage
+order: 2
+lead: 'The S3 extension registers a TemplateStorageProvider under the storage key "s3", giving every node in the cluster a single source of truth for templates. Wrappers pull what they need from the bucket instead of relying on host paths or manual sync.'
+description: 'Centralized multi-node template storage on S3 or MinIO: config keys, bucket layout, the upload and download commands, and per-template storage selection.'
+---
+
+Without remote storage, each Wrapper either keeps its own copy of every template tree or receives them over the cluster sync path. The S3 extension replaces both with a centralized backend: a single bucket holds every template as a ZIP, and any node fetches a template on demand by its `group` and `name`. It is the recommended layout for multi-node clusters and for cloud-mode Kubernetes deployments where local host paths are not available.
+
+## Configuration
+
+Place `extension-storage-s3.jar` in `./extensions/`, then create `./extensions/s3/config.json`:
+
+```json title="extensions/s3/config.json"
+{
+	"bucket": "universe-templates",
+	"region": "us-east-1",
+	"endpoint": null,
+	"accessKey": null,
+	"secretKey": null,
+	"prefix": "templates/"
+}
+```
+
+| Field | Default | Purpose |
+| --- | --- | --- |
+| bucket | `"universe-templates"` | S3 bucket name. |
+| region | `"us-east-1"` | AWS region. Set a value for MinIO as well. |
+| endpoint | `null` | Custom URL for an S3-compatible service (MinIO, Ceph). |
+| accessKey | `null` | Access credential. |
+| secretKey | `null` | Secret credential. |
+| prefix | `"templates/"` | Key path prefix applied to every object. |
+
+<Callout type="tip">
+For MinIO or another S3-compatible service, set `endpoint` to the service URL and keep `region` populated. The same provider code handles both.
+</Callout>
+
+```json title="MinIO example"
+{
+	"bucket": "universe-templates",
+	"region": "us-east-1",
+	"endpoint": "https://minio.internal:9000",
+	"accessKey": "minioadmin",
+	"secretKey": "minioadmin",
+	"prefix": "templates/"
+}
+```
+
+## Bucket layout
+
+Each template tree is stored as a single ZIP keyed by group and name, following the pattern `{prefix}{group}/{name}.zip`. A template at group `server`, name `base` with the default prefix lands at `templates/server/base.zip`:
+
+```text title="bucket contents"
+s3://universe-templates/
+  templates/
+    server/
+      base.zip          ← {prefix}{group}/{name}.zip
+      lobby.zip
+    proxy/
+      velocity.zip
+```
+
+## Upload and download
+
+The extension adds two console commands for moving templates between local disk and the bucket:
+
+```bash title="s3 commands"
+# Zip the local template and upload it to S3
+s3 upload server/base
+
+# Download from S3 and extract into ./templates/
+s3 download server/base
+```
+
+## Selecting S3 per template
+
+Set `"storage": "s3"` on a template entry in `templateInstallationConfig` to fetch that template from the bucket instead of the local cache. Local and remote templates can share the same key, so a configuration can mix both:
+
+```json title="configuration excerpt"
+{
+	"templateInstallationConfig": {
+		"allOf": [
+			{ "name": "base", "group": "server", "storage": "s3", "priority": 0 }
+		]
+	}
+}
+```
+
+<Callout type="info">
+When both the S3 and Kubernetes extensions are enabled in cloud mode, Universe generates init containers that pull templates on the node where the Pod is scheduled before the main container starts. No extra configuration is needed for that handoff.
+</Callout>
+
+## Reloading credentials
+
+Rotating keys or changing the bucket does not require a cluster restart. A reload closes the existing clients, re-reads the config, and registers a fresh provider:
+
+```bash
+extension reload storage-s3
+```
+
+<CardGrid>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+How extensions load and the registries they hook into.
+</Card>
+<Card title="GitOps" href="/docs/extensions/gitops">
+Sync templates from Git instead of, or alongside, S3.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Implement your own TemplateStorageProvider for another backend.
+</Card>
+</CardGrid>

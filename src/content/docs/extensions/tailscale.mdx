@@ -1,0 +1,83 @@
+---
+title: Tailscale
+order: 5
+lead: 'The Tailscale extension implements TemplateVariableProvider and exposes a node''s mesh-network addresses as template variables. Instances pick up stable per-node addresses at deploy time without depending on public IPs.'
+description: 'Inject a node''s Tailscale mesh-network IP, hostname, and MagicDNS name into Universe template variables for stable per-node addressing.'
+---
+
+Nodes spread across data centers or behind NAT rarely have stable, routable addresses for each other. Tailscale gives every node a fixed address on a private tailnet. This extension reads those addresses on the local node and exposes them as `%TAILSCALE_*%` template variables, so an instance's config files can reference the mesh address of the node they run on without any hard-coded IPs.
+
+## Injected variables
+
+The extension provides these variables during template variable replacement:
+
+| Variable | Example | Meaning |
+| --- | --- | --- |
+| `%TAILSCALE_IP%` | `100.64.1.1` | IPv4 address on the tailnet. |
+| `%TAILSCALE_IP6%` | `fd7a:115c:a1e0::1` | IPv6 address on the tailnet. |
+| `%TAILSCALE_HOSTNAME%` | `my-server` | Machine hostname as seen in Tailscale. |
+| `%TAILSCALE_MAGIC_DNS%` | `my-server.tail12345.ts.net` | Full MagicDNS FQDN for the node. |
+| `%TAILSCALE_ADDRESS%` | `100.64.1.1` | Alias for `%TAILSCALE_IP%`. |
+
+Reference them in any file listed under a configuration's `fileModifications`:
+
+```properties title="server.properties"
+server-ip=%TAILSCALE_IP%
+advertised-host=%TAILSCALE_MAGIC_DNS%
+```
+
+## Configuration
+
+Place `extension-tailscale.jar` in `./extensions/` and create `./extensions/tailscale/config.json`:
+
+```json title="extensions/tailscale/config.json"
+{
+	"binaryPath": "tailscale",
+	"timeoutMs": 5000,
+	"warnIfUnavailable": true,
+	"socketPath": "/var/run/tailscale/tailscaled.sock"
+}
+```
+
+| Field | Default | Purpose |
+| --- | --- | --- |
+| binaryPath | `"tailscale"` | Path to the Tailscale binary. |
+| timeoutMs | `5000` | CLI response timeout in milliseconds. |
+| warnIfUnavailable | `true` | Log a startup warning when Tailscale cannot be reached. |
+| socketPath | `null` | Daemon socket path, useful inside Docker. |
+
+## How it resolves addresses
+
+On load, the extension runs `tailscale status --json`, parses the response, and caches the result for 30 seconds before refreshing. Each deploy reads from that cache, so resolution adds no per-instance CLI cost during a burst of deployments.
+
+## Running inside Docker
+
+When Universe runs in a container, mount both the binary and the daemon socket so the extension can query the host's Tailscale state:
+
+```yaml title="docker-compose.yml"
+volumes:
+  - /usr/bin/tailscale:/usr/bin/tailscale:ro
+  - /var/run/tailscale:/var/run/tailscale
+```
+
+Confirm connectivity from inside the container:
+
+```bash
+docker exec <container> tailscale status
+```
+
+<Callout type="note">
+If Tailscale is unavailable, every `%TAILSCALE_*%` variable resolves to an empty string and `hostAddress` falls back to its literal value. Deploys are not blocked by a missing tailnet.
+</Callout>
+
+<CardGrid>
+<Card title="Templates" href="/docs/configuration/templates">
+How template variables are resolved and which files are scanned.
+</Card>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+The TemplateVariableProvider registry and the extension lifecycle.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Write your own variable provider against the same interface.
+</Card>
+</CardGrid>

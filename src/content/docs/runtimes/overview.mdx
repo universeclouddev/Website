@@ -1,0 +1,113 @@
+---
+title: Runtimes overview
+order: 1
+lead: 'A runtime is the execution backend a Wrapper uses to launch a process, track it, pipe stdin, and tear it down. Universe ships three built-in runtimes and adds two more through extensions, all behind a single RuntimeProvider contract.'
+description: 'The runtime abstraction in Universe: screen, tmux, process, docker, and kubernetes behind one RuntimeProvider interface, plus a comparison table and guidance on which to pick.'
+---
+
+Every instance Universe deploys runs inside a **runtime**. The Wrapper does not care whether your command ends up as a detached `screen` session, a sibling Docker container, or a Kubernetes Pod, it delegates startup, PID or container tracking, command piping, and cleanup to whichever `RuntimeProvider` the instance configuration names. That indirection is what lets the same template and the same `command` string deploy unchanged across bare metal, containers, and a cloud cluster.
+
+## The RuntimeProvider contract
+
+Runtimes plug in through the `RuntimeProvider` interface defined in the `api` module. The Wrapper holds a `RuntimeRegistry`, a Guice-managed concurrent map from a string key to a provider instance. When a `DeployInstanceTask` arrives, `TaskRouter` looks up the provider by the configuration's `runtime` key and calls `start()` against the prepared working directory.
+
+```kotlin title="api: RuntimeProvider"
+interface RuntimeProvider {
+	val key: String
+
+	fun start(instanceId: String, workDir: File, command: String, env: Map<String, String>): Int
+	fun stop(instanceId: String)
+	fun executeCommand(instanceId: String, command: String)
+	fun getLogs(instanceId: String, lines: Int): List<String>
+	fun recover(): List<String>
+}
+```
+
+Built-in providers (`screen`, `tmux`, `process`) register themselves when a node starts in Wrapper mode. Extension-provided runtimes register inside `Extension.onLoad()` using the injected `RuntimeRegistry`, so the extension JAR must be installed before the first deploy task is routed to that node.
+
+## Available runtimes
+
+| Key | Type | Best for | Extension |
+| --- | --- | --- | --- |
+| `screen` | Process, GNU Screen session | Local development, bare metal | Built in |
+| `tmux` | Process, tmux session | Local development, bare metal | Built in |
+| `process` | Direct `ProcessBuilder` | Headless runs with no session manager | Built in |
+| `docker` | Container, Docker out of Docker | Isolation, per-instance containers | `runtime-docker` |
+| `kube` | Kubernetes Pod | Cloud-native, multi-node, scaling | `runtime-k8s` |
+
+<Callout type="info">
+The three built-in runtimes share their lifecycle: spawn a detached unit named `universe-<instanceId>`, pipe stdin to it, and reconcile any surviving sessions on startup through `recover()`. The container and Pod runtimes track a container ID or Pod name instead of a session, but expose the same five methods.
+</Callout>
+
+## How the Wrapper picks one
+
+Selection is entirely declarative. The `runtime` field in an instance configuration under `./configuration/` must match a registered provider key exactly. Switching backends is a one-line edit, the `command`, ports, and templates stay the same.
+
+<Tabs tabs={['screen', 'docker']}>
+<Fragment slot="0">
+
+```json title="configuration/default.json"
+{
+	"name": "default",
+	"runtime": "screen",
+	"command": "java -jar server.jar",
+	"availablePorts": { "min": 25565, "max": 25570 }
+}
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="configuration/default.json"
+{
+	"name": "default",
+	"runtime": "docker",
+	"command": "java -jar server.jar",
+	"availablePorts": { "min": 25565, "max": 25570 }
+}
+```
+
+</Fragment>
+</Tabs>
+
+After editing a configuration file, reload so the Master picks up the change:
+
+```bash
+# Console
+config reload
+
+# REST
+curl -X POST http://localhost:7000/api/node/reload
+```
+
+<Callout type="warning">
+An instance only deploys onto a Wrapper that has its runtime registered. If you set `"runtime": "docker"` but the target node never loaded the `runtime-docker` extension, `TaskRouter` has no provider to call and the deploy fails. Keep the `nodes` list of a configuration aligned with the Wrappers that actually carry the matching extension.
+</Callout>
+
+## When to use which
+
+- **screen or tmux** for local and bare-metal work. Zero setup beyond installing the multiplexer, and you can attach to a live session with `screen -r universe-<id>` for hands-on debugging.
+- **process** when you want a plain child process with no session manager, for example inside a container that already provides its own supervision.
+- **docker** when instances need filesystem and network isolation from each other and from the orchestrator, with real-time log streaming over the REST and WebSocket APIs.
+- **kube** for distributed, auto-scaling deployments across a managed cluster, where each instance becomes a Pod with its own Service.
+
+<Callout type="note">
+Whichever runtime you choose, `PortAllocator` still guarantees a conflict-free port. It checks in-memory allocations for this JVM, scans the cluster-wide instances map over Hazelcast, and probes the OS with a `ServerSocket` bind before committing a port.
+</Callout>
+
+## Explore the runtimes
+
+<CardGrid>
+<Card title="Screen & tmux" href="/docs/runtimes/screen-tmux">
+The two built-in session runtimes, attaching, log capture, and node requirements.
+</Card>
+<Card title="Docker runtime" href="/docs/runtimes/docker">
+Per-instance containers via the `runtime-docker` extension, images, ports, and volumes.
+</Card>
+<Card title="Kubernetes runtime" href="/docs/runtimes/kubernetes">
+Pod-based execution via the `runtime-k8s` extension, namespaces, Services, and S3 init.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+Where the `RuntimeProvider` sits in the Master and Wrapper task flow.
+</Card>
+</CardGrid>

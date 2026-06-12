@@ -1,0 +1,183 @@
+---
+title: Architecture
+order: 3
+lead: 'Master/Wrapper topology, Hazelcast IMap state and IExecutor dispatch, the Ktor REST API flow, instance lifecycle states, and per-module responsibilities.'
+---
+
+Universe separates orchestration concerns across two node roles, **Master** and **Wrapper**, connected by a Hazelcast cluster. The Master owns all authoritative state and exposes a REST API; Wrappers own nothing persistently but execute every concrete action: copying templates, replacing variables, and managing OS processes. Both roles run from the same fat JAR, and a single configuration flag decides which role a node assumes at startup.
+
+## Master / Wrapper topology
+
+When `isMasterNode: true`, the startup sequence in `UniverseApplication` registers a `ResilienceMembershipListener`, loads all instance configurations from `./configuration/` into the Hazelcast configurations map, starts the Ktor HTTP server, and launches `InstanceCountEnforcer` to maintain `minimumServiceCount` guarantees. When `isMasterNode: false`, the node joins the cluster using the Master's `masterAddress:masterPort`, registers the built-in runtime providers (`tmux`, `screen`, `process`), loads extensions, and begins listening for task objects dispatched over `IExecutorService`.
+
+<Mermaid title="component layout" chart={`
+flowchart LR
+  subgraph master["Master Node"]
+    direction TB
+    api["Ktor REST API<br/>POST · PUT /api/instances"]
+    hz["Hazelcast<br/>IMap state · IExecutor dispatch"]
+    cmd["Console Commands<br/>cluster · instance · config"]
+  end
+  subgraph wrapper["Wrapper Node(s)"]
+    direction TB
+    router["TaskRouter · IExecutor<br/>routes deploy / stop / sync"]
+    tmpl["Template Manager<br/>copy tree · replace %VARIABLE%"]
+    runtime["RuntimeProvider<br/>screen · tmux · process · docker"]
+  end
+  master ==>|Hazelcast cluster| wrapper
+  style master stroke:#7aa2f7,stroke-width:1.5px
+  style wrapper stroke:#7dcfff,stroke-width:1.5px
+`} />
+
+## Component reference
+
+<Accordion title="Master: Ktor REST API">
+`KtorServerService` starts only when `isMasterNode = true`. It runs on Ktor 3.4.3 with a Netty engine and registers six route groups:
+
+| Route file | Responsibility |
+| --- | --- |
+| InstanceRoutes | `GET/POST /api/instances`, `DELETE/PATCH /api/instances/{id}`, stdin execute, log retrieval, live-log WebSocket. |
+| CommandRoutes | `POST /api/commands/execute`, captures console output and returns it as JSON. |
+| ClusterRoutes | `GET /api/cluster/nodes`, node details, remote command execution. |
+| NodeRoutes | `GET /api/node`, `/api/node/config`, `POST /api/node/reload`, `GET /api/ping`. |
+| ConfigurationRoutes | Full CRUD on `./configuration/*.json` via the Hazelcast configurations map. |
+| TemplateRoutes | Template listing, info, and sync dispatch. |
+
+All routes use Gson content negotiation. Bearer auth, CORS, and a global exception handler are registered as Ktor plugins.
+</Accordion>
+
+<Accordion title="Master: Hazelcast IMap state">
+`ClusterStateService` manages two distributed maps visible to every cluster member:
+
+- `"instances" → IMap<String, InstanceInfo>` is the single source of truth for all running, creating, offline, and stopped instances. Wrappers write state updates directly to this map via `ClusterStateService.putInstance()`, since both nodes are Hazelcast members sharing the same distributed map.
+- `"configurations" → IMap<String, Configuration>` is loaded from `./configuration/` on startup and reloadable at runtime via `config reload` or `POST /api/node/reload`.
+
+`ResilienceMembershipListener` fires on `memberRemoved`: any instance whose `wrapperNodeId` matches the departed member is transitioned to `OFFLINE` rather than deleted, preserving history and enabling future recovery.
+</Accordion>
+
+<Accordion title="Master: console commands">
+`CommandBootstrap` reads `System.in` on a dedicated thread using JLine. The same command registry backs both the interactive console and `POST /api/commands/execute`, so every command is available over HTTP without a terminal. All console output is captured into a list and returned in the REST response.
+
+Key command groups: `cluster`, `instance`, `config`, `template`, `extension`, `s3` (via extension), `help`, and `stop`.
+</Accordion>
+
+<Accordion title="Wrapper: TaskRouter and IExecutorService">
+The Master dispatches work to Wrappers by submitting `UniverseCallableTask` objects, Gson-serialised JSON strings wrapped in `Callable<String>`, to Hazelcast `IExecutorService`, targeting a specific cluster member UUID.
+
+`TaskDeserializer` on the receiving Wrapper deserialises the JSON back to a concrete task type. `TaskRouter` then dispatches to the appropriate handler:
+
+| Task | Handler |
+| --- | --- |
+| DeployInstanceTask | `TemplateManager.resolve()` → `RuntimeProvider.start()` |
+| StopInstanceTask | `RuntimeProvider.stop()` |
+| ExecuteCommandTask | `RuntimeProvider.executeCommand()` (pipes to process stdin) |
+| TemplateSyncTask | `TemplateSyncService`, unzips received bytes into `./templates/` |
+| ShutdownNodeTask | Stops all local instances, releases ports, and exits the JVM. |
+</Accordion>
+
+<Accordion title="Wrapper: TemplateManager">
+`TemplateManager` resolves the full file tree for an instance before the runtime starts:
+
+1. Reads `TemplateInstallationConfig` from the instance's `Configuration`.
+2. Collects templates from `allOf`, `allInGroups`, `oneOf`, and `oneInGroups`, sorting by `priority` (ascending).
+3. Copies each template tree from `./templates/<group>/<name>/` to `./running/<instance-id>/`, optionally overwriting present files when `onTemplatePasteOverridePresentFiles` is `true`.
+4. Scans every file in `Configuration.fileModifications` and replaces `%VARIABLE%` placeholders with values from built-in providers and any extension-contributed `TemplateVariableProvider`.
+</Accordion>
+
+<Accordion title="Wrapper: RuntimeProvider">
+`RuntimeRegistry` (a Guice-managed concurrent map) maps string keys to `RuntimeProvider` implementations. Built-in providers registered at startup:
+
+| Key | Class | Mechanism |
+| --- | --- | --- |
+| screen | ScreenRuntimeProvider | `screen -dmS` session; `screen -S <id> -X stuff` for stdin. |
+| tmux | TmuxRuntimeProvider | `tmux new-session -d`; `tmux send-keys` for stdin. |
+| process | ProcessRuntimeProvider | Direct `ProcessBuilder`; no session manager. |
+
+Extension-provided runtimes (`docker`, `k8s`) register themselves in `Extension.onLoad()` via the injected `RuntimeRegistry`, and must be installed before the first deploy task arrives.
+</Accordion>
+
+## Hazelcast task dispatch
+
+Task objects are defined in the `api` module and serialised to JSON strings before submission to `IExecutorService`. The full dispatch path for a `POST /api/instances` request is:
+
+1. Ktor route handler receives `{"configurationName": "default"}`.
+2. Master selects a target Wrapper from `Configuration.nodes` (matched against live Hazelcast members).
+3. Master writes a new `InstanceInfo` with `state = CREATING` into the instances map.
+4. Master wraps a `DeployInstanceTask` as a `UniverseCallableTask` JSON payload.
+5. `TaskDispatcher.dispatch(task, targetMemberUUID)` submits the callable to `IExecutorService`.
+6. Hazelcast serialises and routes the callable to the target member.
+7. Wrapper deserialises the payload in `TaskDeserializer` and extracts the `DeployInstanceTask`.
+8. `TaskRouter` calls `TemplateManager` (copy + variable replace), then `RuntimeProvider.start()`.
+9. Wrapper writes `state = ONLINE` directly to the instances map via `ClusterStateService.putInstance()`.
+
+## Instance lifecycle
+
+<Steps>
+<Step title="CREATING">
+The Master writes the `InstanceInfo` record to the instances map with `state = CREATING` immediately after selecting a Wrapper and before dispatching the task. The instance is already visible in `GET /api/instances` at this point.
+</Step>
+<Step title="ONLINE">
+Once the Wrapper has copied templates, replaced variables, and started the process via `RuntimeProvider.start()`, it writes the updated `InstanceInfo` (with `state = ONLINE`, the allocated port, and the process PID) directly to the shared map via `ClusterStateService.putInstance()`. Wrappers send periodic heartbeats to keep `lastHeartbeat` current.
+</Step>
+<Step title="OFFLINE">
+If a Wrapper disconnects from the cluster (network partition, crash, container stop), `ResilienceMembershipListener` on the Master marks every instance owned by that Wrapper as `OFFLINE`. **The records are not deleted**, preserving history and letting `InstanceRecoveryService` attempt re-attachment on reconnect.
+</Step>
+<Step title="STOPPED">
+A deliberate stop via `DELETE /api/instances/{id}`, `instance stop <id>`, or `PATCH /api/instances/{id}/lifecycle?target=stop` dispatches a `StopInstanceTask` to the owning Wrapper. After `RuntimeProvider.stop()` completes, the state becomes `STOPPED` and the working directory in `./running/<id>/` is cleaned up (unless `static: true`).
+</Step>
+</Steps>
+
+## Data flow: creating an instance
+
+The full sequence when you run `POST /api/instances`:
+
+<Mermaid title="deploy sequence" chart={`
+sequenceDiagram
+  participant C as Client
+  participant M as Master · REST API
+  participant H as Hazelcast cluster
+  participant W as Wrapper
+  C->>M: POST /api/instances
+  Note over M: resolve config · select wrapper<br/>allocate port · write CREATING
+  M->>H: submit DeployInstanceTask
+  H->>W: deliver Callable to target member
+  Note over W: TaskDeserializer → TaskRouter
+  W->>W: TemplateManager copies tree · replaces vars
+  W->>W: RuntimeProvider.start()
+  W->>H: putInstance(state ONLINE)
+  H-->>C: InstanceInfo · ONLINE · port 25565
+`} />
+
+## Port allocation strategy
+
+`PortAllocator` checks three sources before committing to a port, preventing conflicts across concurrent deployments and external services:
+
+1. **In-memory allocations** already claimed by this JVM during the current session.
+2. **Cluster-wide map scan** over all `ONLINE` and `CREATING` instances, skipping their `allocatedPort` values.
+3. **OS-level probe** that attempts a `ServerSocket` bind and a TCP connect on each candidate port to catch services already listening on the machine.
+
+## Module reference
+
+| Module | Description |
+| --- | --- |
+| api | Shared DTOs and interfaces: `InstanceInfo`, `Configuration`, `TemplateInstallationConfig`, `PortRange`, `InstanceState`, `RuntimeProvider`, `RuntimeRegistry`, and the task objects (`DeployInstanceTask`, `StopInstanceTask`, `ExecuteCommandTask`, `TemplateSyncTask`, `ShutdownNodeTask`). |
+| app | Core orchestrator: `UniverseApplication`, `HazelcastService`, `ClusterStateService`, `KtorServerService`, `TemplateManager`, `TaskDispatcher`, `TaskRouter`, `PortAllocator`, `CommandBootstrap`, the built-in runtimes, `InstanceCountEnforcer`, `InstanceHealthMonitor`, and `InstanceRecoveryService`. |
+| loader | Bootstrap classloader: extracts `app.jarinjar` to a temp file, downloads runtime dependencies from `dependencies.txt` via `DependencyLoader`, appends them to a `URLClassLoader`, and invokes `AppKt.run()`. |
+| extension-api | Extension-facing contracts: `Extension` (lifecycle hooks `onLoad`, `onReload`, `onUnload`), `TemplateStorageProvider`, `TemplateVariableProvider`, and their registries. |
+
+## Explore further
+
+<CardGrid>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+Every field in `config.json`, `database.json`, and the debug logging system.
+</Card>
+<Card title="Runtimes" href="/docs/runtimes/overview">
+How `screen`, `tmux`, and `process` work, plus Docker and Kubernetes via extensions.
+</Card>
+<Card title="Extensions" href="/docs/extensions/overview">
+Extension lifecycle, the available registries, and how to write your own.
+</Card>
+<Card title="API reference" href="/docs/api-reference/overview">
+Endpoint reference with request/response schemas, WebSocket streams, and auth.
+</Card>
+</CardGrid>

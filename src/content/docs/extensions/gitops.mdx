@@ -1,0 +1,107 @@
+---
+title: GitOps
+order: 6
+lead: 'The GitOps extension clones a Git repository at startup and pulls it on a configurable interval. After each successful pull it copies the repo''s templates/ and configuration/ directories into the live Universe directories, making Git the source of truth for what the cluster runs.'
+description: 'Sync Universe templates and configurations from a Git repository on a polling interval, with HTTPS token or SSH key authentication and reconciliation on every pull.'
+---
+
+GitOps treats a Git repository as the declarative state of your cluster: you commit template trees and instance configurations, and the running node reconciles itself to match. This extension implements that loop with a clone-then-poll model. It does not use webhooks; instead it pulls on a fixed interval and reconciles after every successful pull.
+
+## How it works
+
+<Steps>
+<Step title="Clone or open">
+On startup the repository is cloned to `targetPath` (default `./git-sync`). If a clone already exists there, it is opened in place.
+</Step>
+<Step title="Poll">
+A scheduled executor runs a Git pull every `intervalMs` milliseconds (default five minutes).
+</Step>
+<Step title="Reconcile">
+After a successful pull, the repo's `templates/` and `configuration/` directories are copied into the live Universe directories, bringing the node in line with the committed state.
+</Step>
+</Steps>
+
+Structure the repository so its top-level folders mirror the Universe working directory:
+
+```text title="repository layout"
+my-universe-config/
+  templates/
+    server/base/
+    proxy/velocity/
+  configuration/
+    lobby.json
+    proxy.json
+```
+
+<Callout type="warning">
+Reconciliation overwrites local files on every sync. Direct edits to `./templates/` or `./configuration/` are lost the next time the extension pulls. Treat the Git repository as authoritative and make all changes there.
+</Callout>
+
+## Configuration
+
+Place `extension-gitops.jar` in `./extensions/` and create `./extensions/gitops/config.json`:
+
+```json title="extensions/gitops/config.json"
+{
+	"url": "",
+	"branch": "main",
+	"targetPath": "./git-sync",
+	"intervalMs": 300000,
+	"enabled": false,
+	"username": "",
+	"password": "",
+	"sshKeyPath": ""
+}
+```
+
+| Field | Default | Purpose |
+| --- | --- | --- |
+| url | `""` | Repository URL, HTTPS or SSH form. |
+| branch | `"main"` | Tracked branch. |
+| targetPath | `"./git-sync"` | Local clone destination. |
+| intervalMs | `300000` | Pull interval in milliseconds (5 minutes). |
+| enabled | `false` | Activation toggle. Set to `true` to start syncing. |
+| username | `""` | HTTP Basic Auth username. |
+| password | `""` | Token or password for HTTPS. |
+| sshKeyPath | `""` | Path to an SSH private key for `git@` URLs. |
+
+## Authentication
+
+- **HTTPS with a personal access token:** set `username` and use the PAT as `password`.
+- **SSH keys:** set `sshKeyPath` for a `git@` URL with a matching deploy key.
+- **Public repositories:** no credentials required.
+
+## Forcing a sync
+
+To pull and reconcile immediately rather than waiting for the next interval, reload the extension:
+
+<Tabs tabs={['Console', 'REST API']}>
+<Fragment slot="0">
+
+```bash
+extension reload gitops
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```bash
+curl -X POST http://localhost:7000/api/commands/execute \
+  -H "Content-Type: application/json" \
+  -d '{"command": "extension reload gitops"}'
+```
+
+</Fragment>
+</Tabs>
+
+<CardGrid>
+<Card title="S3 storage" href="/docs/extensions/storage-s3">
+An alternative template source for multi-node clusters.
+</Card>
+<Card title="ArgoCD" href="/docs/extensions/argocd">
+Export the resulting state as Kubernetes manifests.
+</Card>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+Extension lifecycle and the reload command.
+</Card>
+</CardGrid>

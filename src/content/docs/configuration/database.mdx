@@ -1,0 +1,115 @@
+---
+title: Database
+order: 4
+lead: 'database.json points Universe at the relational store that holds durable cluster state such as API keys. The bundled H2 backend needs no setup; MySQL is built in, and PostgreSQL, MongoDB, and Redis arrive through extensions.'
+description: 'Universe storage backends: the bundled H2 default, built-in MySQL, and extension-backed PostgreSQL, MongoDB, and Redis, configured through database.json, plus what state persists versus what lives in Hazelcast.'
+---
+
+Universe keeps two kinds of state. Live instance state, which instance is `ONLINE`, on which Wrapper, on which port, lives in Hazelcast distributed maps and is rebuilt as the cluster runs. Durable state that must survive a full cluster restart, such as API keys, lives in a relational database described by `./database.json`. The file is generated on first run with the bundled backend, so a default install already has a working database with nothing to provision.
+
+## What persists where
+
+| State | Store | Why |
+| --- | --- | --- |
+| Running instances (`InstanceInfo`) | Hazelcast `IMap` | Shared live across members; reconciled by the cluster, not the DB. |
+| Instance configurations | Files in `./configuration/` + Hazelcast map | Authored on disk, loaded into the cluster at startup. |
+| API keys (`api_keys` table) | Database | Must outlive any single node and a full restart. |
+
+<Callout type="note">
+The database is not where you look for what is running right now. Live instance state is held in the `"instances"` Hazelcast map and surfaced through `GET /api/instances`. The relational store is for the small set of records that have to be durable, with the core system managing only the `api_keys` table.
+</Callout>
+
+## database.json
+
+`database.json` sits in the same working directory as the JAR and is read at startup. The `provider` field selects the backend; the remaining fields are connection details, and any field a given provider does not use is ignored.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| provider | string | `h2` | Backend selector: `h2`, `mysql`, `postgres`, `mongodb`, `redis`. |
+| url | string | `universe.db` | H2 only. Database filename, created under `./data/`. |
+| host | string | `localhost` | Server hostname for networked backends. |
+| port | int | `3306` | Server port. Override per backend (PostgreSQL defaults to `5432`). |
+| database | string | `universe` | Schema or database name on the server. |
+| username | string | `sa` | Connection user. |
+| password | string | `""` | Connection password. |
+
+## Backends
+
+### H2, the default
+
+H2 is an embedded, file-based store bundled in the core JAR. It runs in MySQL-compatible mode and needs no external server: the database is a file under `./data/` named by `url`. This is the right choice for a single-machine deployment or a first run.
+
+```json title="database.json (H2 default)"
+{
+	"provider": "h2",
+	"url": "universe.db",
+	"host": "localhost",
+	"port": 3306,
+	"database": "universe",
+	"username": "sa",
+	"password": ""
+}
+```
+
+### MySQL, built in
+
+MySQL support ships in the core JAR through the bundled MariaDB driver. Point `host` and `port` at your server and supply credentials. Use this when more than one node needs the same durable records and you already run MySQL.
+
+```json title="database.json (MySQL)"
+{
+	"provider": "mysql",
+	"host": "db.example.com",
+	"port": 3306,
+	"database": "universe",
+	"username": "universe",
+	"password": "changeme"
+}
+```
+
+### PostgreSQL, MongoDB, and Redis via extensions
+
+PostgreSQL, MongoDB, and Redis are not in the core JAR. Drop the matching database extension into `./extensions/`, then set `provider` to `postgres`, `mongodb`, or `redis`. The extension registers the backend at load time, so it must be present before startup.
+
+```json title="database.json (PostgreSQL extension)"
+{
+	"provider": "postgres",
+	"host": "db.example.com",
+	"port": 5432,
+	"database": "universe",
+	"username": "universe",
+	"password": "changeme"
+}
+```
+
+<Callout type="warning">
+Selecting an extension-backed `provider` without the extension Jar in `./extensions/` leaves the backend unregistered and the node cannot start. Install the extension first, then change `provider`.
+</Callout>
+
+## When you need more than H2
+
+Stay on the bundled H2 backend unless one of these applies:
+
+- Several Masters or tools must read the same durable records and you want one shared store rather than a file per node.
+- You already operate a managed MySQL or PostgreSQL instance and prefer your existing backups and access controls.
+- An extension you run expects a specific backend (for example a Redis-backed cache or a MongoDB document store).
+
+<Callout type="tip">
+Because only durable records (chiefly `api_keys`) live in the database, the storage footprint stays small. Most clusters never outgrow H2, and moving to a networked backend is a matter of editing `database.json` and restarting.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+The companion `config.json` that sets node identity and cluster membership.
+</Card>
+<Card title="Database extensions" href="/docs/extensions/databases">
+Add PostgreSQL, MongoDB, or Redis backends through extension JARs.
+</Card>
+<Card title="Security" href="/docs/operations/security">
+API keys, the `api_keys` table, and bearer authentication on the REST API.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+How Hazelcast holds live state while the database holds durable records.
+</Card>
+</CardGrid>

@@ -1,0 +1,18 @@
+---
+interface Props {
+	title?: string;
+	chart: string;
+}
+const { title = 'diagram', chart } = Astro.props;
+---
+
+<figure class="doc-code doc-mermaid" data-doc-mermaid>
+	<figcaption class="doc-code-bar">
+		<span class="w-2 h-2 rounded-full" style="background: var(--color-syn-purple);"></span>
+		<span>{title}</span>
+		<span class="doc-mermaid-tag">diagram</span>
+	</figcaption>
+	<div class="doc-mermaid-canvas">
+		<pre class="mermaid">{chart.trim()}</pre>
+	</div>
+</figure>

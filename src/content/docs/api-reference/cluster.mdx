@@ -1,0 +1,155 @@
+---
+title: Cluster API
+order: 6
+lead: 'Discover the nodes in the Hazelcast cluster and inspect each node''s instances and resource usage. A remote command dispatch endpoint is defined for running console commands on other nodes.'
+description: 'Reference for the Universe cluster endpoints: list cluster nodes, inspect a node''s instances and resources, and dispatch a console command to a remote node.'
+---
+
+Every node in a Universe deployment is a member of one Hazelcast cluster. The cluster endpoints, served by the Master, enumerate those members and report the instances and resources each one owns. They draw on the same distributed state the Master uses to schedule instances.
+
+<Callout type="warning">
+All cluster endpoints require a token with `ALL` permission.
+</Callout>
+
+## List cluster nodes
+
+```http title="endpoint"
+GET /api/cluster/nodes
+```
+
+Returns every node in the cluster with its address, master flag, and current resource usage.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `nodeId` | string | Unique node identifier. |
+| `address` | string | Node address advertised to the cluster. |
+| `master` | boolean | Whether this node runs the REST API and owns authoritative state. |
+| `resources` | NodeResources | `usedRamMB` and `usedCpu` currently in use on the node. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/cluster/nodes \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+[
+  {
+    "nodeId": "node-1",
+    "address": "127.0.0.1",
+    "master": true,
+    "resources": { "usedRamMB": 4096, "usedCpu": 200 }
+  },
+  {
+    "nodeId": "node-2",
+    "address": "10.0.0.12",
+    "master": false,
+    "resources": { "usedRamMB": 2048, "usedCpu": 100 }
+  }
+]
+```
+
+</Fragment>
+</Tabs>
+
+## Get a node
+
+```http title="endpoint"
+GET /api/cluster/nodes/{id}
+```
+
+Returns detailed information about a single node, including the full list of instances it hosts and its resource usage.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `id` | path | The node ID. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/cluster/nodes/node-2 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "nodeId": "node-2",
+  "address": "10.0.0.12",
+  "master": false,
+  "instances": [
+    {
+      "id": "a1b2c3",
+      "configurationName": "lobby",
+      "wrapperNodeId": "node-2",
+      "hostAddress": "10.0.0.12",
+      "allocatedPort": 25565,
+      "state": "ONLINE",
+      "lastHeartbeat": 1718000000000,
+      "processPid": 12345,
+      "allocatedRamMB": 2048,
+      "allocatedCpu": 100,
+      "runtime": "screen"
+    }
+  ],
+  "resources": { "usedRamMB": 2048, "usedCpu": 100 }
+}
+```
+
+</Fragment>
+</Tabs>
+
+## Execute a command on a node
+
+```http title="endpoint"
+POST /api/cluster/nodes/{id}
+```
+
+Dispatches a console command to the specified node. Remote dispatch travels over Hazelcast to the target member. Commands intended for the node serving the request cannot be run through this endpoint; use the [Commands API](/docs/api-reference/commands) on the Master instead.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `command` | string | Console command to execute on the node, such as `instance list`. Required. |
+
+```bash
+curl -X POST http://<master>:7000/api/cluster/nodes/node-2 \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "instance list"}'
+```
+
+<Callout type="warning">
+Targeting the local node returns `400 Bad Request`:
+</Callout>
+
+```json title="400 Bad Request"
+{
+  "error": "Cannot execute command on local node via API"
+}
+```
+
+<Callout type="note">
+Remote node command execution is defined in the API surface but not yet fully wired up; a request to a remote node may return `501 Not Implemented`. For commands on the Master itself, use `POST /api/commands/execute`.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Node API" href="/docs/api-reference/node">
+Inspect the local node's status, configuration, and health check.
+</Card>
+<Card title="Instances API" href="/docs/api-reference/instances">
+Manage the instances reported in each node's detail response.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+Execute console commands on the Master and capture their output.
+</Card>
+</CardGrid>

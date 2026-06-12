@@ -1,0 +1,184 @@
+---
+title: Configurations API
+order: 4
+lead: 'CRUD for instance configuration definitions. Configurations live in the Master Hazelcast configurations map (loaded from ./configuration/*.json) and describe how an instance is built and run. These endpoints list, read, create or update, and delete them.'
+description: 'Reference for the Universe configuration endpoints: list, get, create or update, and delete instance configuration definitions, plus the Configuration schema.'
+---
+
+A configuration is the blueprint an instance is deployed from: which runtime to use, the start command, the template tree to install, the port range to allocate from, and how many instances to keep running. Configurations are keyed by their unique `name` and stored in the Master's distributed configurations map.
+
+<Callout type="warning">
+All configuration endpoints require a token with `ALL` permission.
+</Callout>
+
+## The Configuration object
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `name` | string | Unique configuration name (path key). |
+| `runtime` | string | Runtime provider key. Default `screen`. |
+| `command` | string | Command that starts the instance process. |
+| `static` | boolean | Whether the working directory persists between restarts. Default `false`. |
+| `ramMB` | integer | RAM allocated in MB. Default `2048`. |
+| `cpu` | integer | CPU units (100 = 1 core). Default `100`. |
+| `instanceGroups` | string[] | Groups this configuration belongs to. |
+| `nodes` | string[] | Node IDs allowed to host this configuration. |
+| `hostAddress` | string | Host address clients connect to. |
+| `availablePorts` | PortRange | The `min` and `max` ports Universe scans when allocating. |
+| `minimumServiceCount` | integer | Minimum instances the enforcer maintains. Default `1`. |
+| `environmentVariables` | object | Environment variables, supporting `%VARIABLE%` substitution. |
+| `templateInstallationConfig` | object | Which templates to install (`allOf`, `allInGroups`, `oneOf`, `oneInGroups`) and the override flag. |
+| `fileModifications` | string[] | Files scanned for `%VARIABLE%` replacement after install. |
+| `properties` | object | Additional key→value pairs exposed as template variables. |
+
+## List configurations
+
+```http title="endpoint"
+GET /api/configurations
+```
+
+Returns every stored configuration as a JSON array.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/configurations \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+[
+  {
+    "name": "lobby",
+    "runtime": "screen",
+    "command": "java -Xmx2048M -jar server.jar",
+    "static": false,
+    "ramMB": 2048,
+    "cpu": 100,
+    "instanceGroups": ["lobby"],
+    "nodes": ["node-1"],
+    "hostAddress": "127.0.0.1",
+    "availablePorts": { "min": 25565, "max": 25570 },
+    "minimumServiceCount": 1,
+    "environmentVariables": { "UNIVERSE_INSTANCE_ID": "%INSTANCE_ID%" },
+    "templateInstallationConfig": {
+      "allOf": [{ "name": "base", "group": "server", "storage": "local", "priority": 0 }],
+      "allInGroups": [],
+      "oneOf": [],
+      "oneInGroups": [],
+      "onTemplatePasteOverridePresentFiles": false
+    },
+    "fileModifications": ["server.properties"],
+    "properties": {}
+  }
+]
+```
+
+</Fragment>
+</Tabs>
+
+## Get a configuration
+
+```http title="endpoint"
+GET /api/configurations/{name}
+```
+
+Returns a single configuration by name.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `name` | path | The configuration name. Required. |
+
+```bash
+curl http://<master>:7000/api/configurations/lobby \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+<Callout type="note">
+A name that does not exist returns `404 Not Found`.
+</Callout>
+
+## Create or update a configuration
+
+```http title="endpoint"
+PUT /api/configurations/{name}
+```
+
+Creates the configuration if the name is new, or replaces it if it already exists. The request body is a full `Configuration` object. On success the endpoint returns `204 No Content` with no body.
+
+<Tabs tabs={['curl', 'body']}>
+<Fragment slot="0">
+
+```bash
+curl -X PUT http://<master>:7000/api/configurations/lobby \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @lobby.json
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="lobby.json"
+{
+  "name": "lobby",
+  "runtime": "screen",
+  "command": "java -Xmx2048M -jar server.jar",
+  "static": false,
+  "ramMB": 2048,
+  "cpu": 100,
+  "instanceGroups": ["lobby"],
+  "nodes": ["node-1"],
+  "hostAddress": "127.0.0.1",
+  "availablePorts": { "min": 25565, "max": 25570 },
+  "minimumServiceCount": 1,
+  "environmentVariables": {},
+  "templateInstallationConfig": {
+    "allOf": [{ "name": "base", "group": "server", "storage": "local", "priority": 0 }],
+    "allInGroups": [],
+    "oneOf": [],
+    "oneInGroups": [],
+    "onTemplatePasteOverridePresentFiles": false
+  },
+  "fileModifications": ["server.properties"],
+  "properties": {}
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="tip">
+The `name` in the path is the authoritative key. Keep the `name` field in the body in sync with the path segment to avoid confusion when listing.
+</Callout>
+
+## Delete a configuration
+
+```http title="endpoint"
+DELETE /api/configurations/{name}
+```
+
+Removes the configuration from the cluster. Returns `204 No Content`. Existing instances already deployed from the configuration are not affected by deletion.
+
+```bash
+curl -X DELETE http://<master>:7000/api/configurations/lobby \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Related
+
+<CardGrid>
+<Card title="Instances API" href="/docs/api-reference/instances">
+Deploy instances from these configurations and control their lifecycle.
+</Card>
+<Card title="Templates API" href="/docs/api-reference/templates">
+Manage the template trees referenced by `templateInstallationConfig`.
+</Card>
+<Card title="API overview" href="/docs/api-reference/overview">
+Base URL, response conventions, and status codes.
+</Card>
+</CardGrid>

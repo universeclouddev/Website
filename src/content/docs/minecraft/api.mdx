@@ -1,0 +1,251 @@
+---
+title: Plugin API
+order: 4
+lead: 'The :minecraft:api module lets any plugin talk to the Universe cluster at runtime: query instances, start and stop servers, manage configurations, and trigger template syncs, all through non-blocking CompletableFuture methods.'
+description: 'The minecraft-api module for plugin developers: a JVM-8 library to query instances, start and stop servers, manage configurations, and trigger template syncs from your own Minecraft plugin.'
+---
+
+The `:minecraft:api` module is a lightweight, JVM-8 compatible library that lets any Minecraft plugin interact with the Universe cluster at runtime. It carries no external dependencies and performs no relocation, so its classes are available consistently across every platform flavour. Use it to read live instance state, deploy and stop servers, and drive your own network logic.
+
+## Add the dependency
+
+Depend on `minecraft-api` with `implementation` rather than `compileOnly`, since the classes must resolve at runtime.
+
+<Tabs tabs={['Gradle (Kotlin)', 'Gradle (Groovy)']}>
+<Fragment slot="0">
+
+```kotlin title="build.gradle.kts"
+dependencies {
+    implementation("gg.scala.universe:minecraft-api:<version>")
+}
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```text title="build.gradle"
+dependencies {
+    implementation 'gg.scala.universe:minecraft-api:<version>'
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="warning">
+Declare `depend: [Universe]` in your `plugin.yml` so the platform plugin registers its API implementation during `onEnable()` before your plugin loads. The implementation is unregistered on `onDisable()`.
+</Callout>
+
+## Entry point
+
+Access everything through the static `Universe` object. Always null-check `getAPI()` or verify `isAvailable()` first, the API is absent until the platform plugin has registered it.
+
+```kotlin
+val api = Universe.getAPI() ?: run {
+    logger.warning("Universe is not loaded")
+    return
+}
+
+// Or check availability without retrieving the instance:
+if (!Universe.isAvailable()) { return }
+```
+
+## UniverseAPI
+
+The root interface exposes connection metadata and the three managers:
+
+```kotlin title="UniverseAPI"
+getMasterUrl(): String                       // Master REST API URL
+getInstanceId(): String?                     // this server's instance ID
+isConnected(): Boolean                       // connection status
+getInstanceManager(): InstanceManager        // lifecycle operations
+getConfigurationManager(): ConfigurationManager
+getTemplateManager(): TemplateManager
+```
+
+## Managers
+
+Every manager operation returns a `CompletableFuture` and runs without blocking the server thread. Chain with `thenAccept`, `thenApply`, or `thenRun`.
+
+<Accordion title="InstanceManager">
+
+Handles the full instance lifecycle and querying:
+
+```kotlin title="InstanceManager"
+startInstance(configurationName: String): CompletableFuture<String>
+startInstance(configuration: Configuration): CompletableFuture<String>
+stopInstance(instanceId: String): CompletableFuture<Void>
+executeCommand(instanceId: String, command: String): CompletableFuture<Void>
+getInstance(instanceId: String): CompletableFuture<Optional<InstanceInfo>>
+getInstances(): CompletableFuture<List<InstanceInfo>>
+getInstancesByState(state: InstanceState): CompletableFuture<List<InstanceInfo>>
+getInstanceState(instanceId: String): CompletableFuture<Optional<InstanceState>>
+reportState(state: InstanceState): CompletableFuture<Void>   // internal use
+```
+
+</Accordion>
+
+<Accordion title="ConfigurationManager">
+
+Read and write instance configurations across the cluster:
+
+```kotlin title="ConfigurationManager"
+getConfigurations(): CompletableFuture<List<Configuration>>
+getConfiguration(name: String): CompletableFuture<Configuration?>
+saveConfiguration(configuration: Configuration): CompletableFuture<Void>
+deleteConfiguration(name: String): CompletableFuture<Void>
+```
+
+</Accordion>
+
+<Accordion title="TemplateManager">
+
+List templates and trigger a cluster-wide synchronization:
+
+```kotlin title="TemplateManager"
+getTemplates(): CompletableFuture<List<Template>>
+getTemplatesByGroup(group: String): CompletableFuture<List<Template>>
+syncTemplates(): CompletableFuture<Void>
+```
+
+</Accordion>
+
+## InstanceInfo
+
+Every instance query returns `InstanceInfo`. Fields are accessible directly in Kotlin; Java uses the generated getters.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `id` | `String` | 6-character unique ID. |
+| `configurationName` | `String` | Source configuration name. |
+| `wrapperNodeId` | `String` | Wrapper node running the instance. |
+| `hostAddress` | `String` | IP or DNS address. |
+| `allocatedPort` | `Int` | Assigned port. |
+| `state` | `String` | Raw state string. |
+| `lastHeartbeat` | `Long` | Last heartbeat, epoch ms. |
+| `processPid` | `Long?` | OS process ID, if available. |
+| `allocatedRamMB` | `Int` | RAM allocation. |
+| `allocatedCpu` | `Int` | CPU shares. |
+| `runtime` | `String` | Runtime type (screen, tmux, docker). |
+| `players` | `Int` | Current player count. |
+| `maxPlayers` | `Int` | Maximum player capacity. |
+
+Convenience members save you a round of manual parsing:
+
+- `getStateEnum(): InstanceState` returns the typed state.
+- `getAddress(): String` returns the `host:port` form.
+- `isOnline(): Boolean` is true when the state is `ONLINE`.
+
+A builder is available for constructing instances in tests or local logic:
+
+```kotlin title="InstanceInfo.Builder"
+val info = InstanceInfo.Builder()
+    .id("abc123")
+    .configurationName("lobby")
+    .hostAddress("10.0.0.5")
+    .allocatedPort(25565)
+    .state(InstanceState.ONLINE)
+    .build()
+```
+
+## InstanceState
+
+```kotlin title="InstanceState"
+enum class InstanceState {
+    CREATING,  // setup phase
+    ONLINE,    // running and heartbeating
+    OFFLINE,   // clean shutdown
+    STOPPED    // abnormal termination
+}
+```
+
+## End-to-end example
+
+The following plugin reads the Master URL, lists online instances, scales up lobbies when fewer than two are online, and triggers a template sync, all on enable.
+
+<Tabs tabs={['Kotlin', 'Java']}>
+<Fragment slot="0">
+
+```kotlin title="MyPlugin.kt"
+import gg.scala.universe.minecraft.api.Universe
+import gg.scala.universe.minecraft.api.InstanceState
+import org.bukkit.plugin.java.JavaPlugin
+
+class MyPlugin : JavaPlugin() {
+    override fun onEnable() {
+        val api = Universe.getAPI() ?: return
+
+        logger.info("Universe Master: ${api.getMasterUrl()}")
+        logger.info("Instance ID: ${api.getInstanceId()}")
+
+        // List online instances
+        api.instanceManager
+            .getInstancesByState(InstanceState.ONLINE)
+            .thenAccept { instances ->
+                instances.forEach {
+                    logger.info("${it.id} @ ${it.getAddress()}")
+                }
+            }
+
+        // Start a lobby if fewer than two exist
+        api.instanceManager.getInstances()
+            .thenAccept { all ->
+                val lobbies = all.filter {
+                    it.configurationName == "lobby" && it.isOnline()
+                }
+                if (lobbies.size < 2) {
+                    api.instanceManager.startInstance("lobby")
+                        .thenAccept { newId ->
+                            logger.info("Started: \$newId")
+                        }
+                }
+            }
+
+        // Trigger a cluster-wide template sync
+        api.templateManager.syncTemplates()
+            .thenRun { logger.info("Sync triggered") }
+    }
+
+    override fun onDisable() = Universe.unregister()
+}
+```
+
+</Fragment>
+<Fragment slot="1">
+
+The interface follows standard Java naming with generated getters for seamless interop:
+
+```java title="MyPlugin.java"
+UniverseAPI api = Universe.getAPI();
+if (api == null) return;
+
+api.getInstanceManager().getInstances().thenAccept(instances -> {
+    for (InstanceInfo info : instances) {
+        System.out.println(info.getId() + " -> " + info.getAddress());
+    }
+});
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="tip">
+Because every call returns a `CompletableFuture`, you can compose multistep network logic (start a server, wait for `ONLINE`, then route players) without ever blocking the main thread.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Server plugins" href="/docs/minecraft/plugins">
+Install the platform plugin that registers the API implementation your code consumes.
+</Card>
+<Card title="Proxy plugins" href="/docs/minecraft/proxy-plugins">
+See how the built-in poller uses the same instance data you can query here.
+</Card>
+<Card title="Minecraft overview" href="/docs/minecraft/overview">
+How instances, heartbeats, and the cluster state map fit together.
+</Card>
+<Card title="Instances API" href="/docs/api-reference/instances">
+The underlying REST endpoints the plugin API wraps.
+</Card>
+</CardGrid>

@@ -1,0 +1,121 @@
+---
+title: API overview
+order: 1
+lead: 'The Universe REST API runs on the Master node at port 7000. This page covers the base URL, bearer-token auth, the response conventions every endpoint follows, the error format, and the resource groups that make up the rest of this reference.'
+description: 'Base URL, authentication, response conventions, and error format for the Universe REST API, plus the resource groups that make up the reference.'
+---
+
+Universe exposes a single REST API served by Ktor on the **Master** node. The server starts only when a node runs with `isMasterNode: true`, listens on `apiPort` (default `7000`), and negotiates content as JSON via Gson. Wrapper nodes never serve HTTP; all orchestration travels over the Hazelcast cluster behind the API.
+
+## Base URL
+
+Every path in this reference is relative to the `/api` prefix on the Master's API port. Substitute the Master host and port for your deployment:
+
+```text title="base url"
+http://<master>:7000/api
+```
+
+For a local single-node setup the base URL is `http://localhost:7000/api`. A path such as `/instances/{id}` in this reference resolves to `http://localhost:7000/api/instances/{id}`.
+
+## Authentication
+
+All endpoints except the health check (`/api/ping`) and the metrics scrape (`/api/metrics`) require a bearer token. Pass it in the `Authorization` header:
+
+```bash
+curl http://<master>:7000/api/instances \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Tokens carry one of two permission levels. `ALL` keys have full admin access and bypass rate limiting; `PUBLIC` keys are read-only and rate-limited. Generate keys from the console with `key create`. See [Authentication](/docs/api-reference/authentication) for the full model.
+
+<Callout type="warning">
+Every instance endpoint requires a key with `ALL` permission. There are no public instance reads. A request without a valid token returns `401 Unauthorized`.
+</Callout>
+
+## Response conventions
+
+Responses follow a small, consistent set of patterns rather than a wrapping envelope:
+
+- **Collections** return a bare JSON array, for example `GET /api/instances` returns `[ InstanceInfo, ... ]`.
+- **Single resources** return the object directly, for example `GET /api/instances/{id}` returns one `InstanceInfo`.
+- **Action endpoints** return a small status object, typically a `message` plus the affected identifier, for example `{ "message": "Instance stopped", "instanceId": "a1b2c3" }`.
+- **Writes that store without returning a body** use `204 No Content`, for example saving or deleting a configuration.
+
+The health check is unauthenticated and reports node identity:
+
+```json title="GET /api/ping"
+{
+  "status": "ok",
+  "nodeId": "node-1",
+  "clusterName": "universe-cluster",
+  "master": true
+}
+```
+
+### Status codes
+
+| Code | Meaning |
+| --- | --- |
+| 200 OK | Request succeeded; body contains the resource or status object. |
+| 201 Created | A new instance or file was created. |
+| 204 No Content | Write succeeded with no response body (configuration save or delete). |
+| 400 Bad Request | Invalid input, such as an unknown configuration name or lifecycle target. |
+| 401 Unauthorized | Missing or invalid `Authorization` header. |
+| 404 Not Found | The named configuration, template, or file does not exist. |
+| 409 Conflict | The target file already exists (template file creation). |
+| 429 Too Many Requests | Rate limit exceeded on a public key. |
+| 501 Not Implemented | Endpoint accepted but not yet wired up (node reload, remote node commands). |
+
+## Error format
+
+Errors return a JSON object with an `error` field describing the failure. A missing or invalid token produces:
+
+```json title="401 Unauthorized"
+{
+  "error": "Unauthorized"
+}
+```
+
+Rate-limited public keys receive `429` with the retry delay both in the message and as a discrete field:
+
+```json title="429 Too Many Requests"
+{
+  "error": "Rate limit exceeded. Retry after 45000ms.",
+  "retryAfterMs": 45000
+}
+```
+
+<Callout type="tip">
+The site ships an interactive Swagger-style reference generated from the same spec. Open the [api reference](/api) tab to try requests against your own Master with a token.
+</Callout>
+
+## Resource groups
+
+The API is organized into the groups below. Each links to its dedicated reference page.
+
+| Group | Base path | Purpose |
+| --- | --- | --- |
+| [Instances](/docs/api-reference/instances) | `/api/instances` | Deploy, control, inspect, and stop instances; run stdin commands; fetch logs. |
+| [Configurations](/docs/api-reference/configurations) | `/api/configurations` | CRUD for instance configuration definitions. |
+| [Templates](/docs/api-reference/templates) | `/api/templates` | Browse template trees, edit files, and sync from storage providers. |
+| [Cluster](/docs/api-reference/cluster) | `/api/cluster` | Discover cluster nodes and dispatch remote node commands. |
+| [Node](/docs/api-reference/node) | `/api/node` | Local node status, configuration, and the unauthenticated health check. |
+| [Commands](/docs/api-reference/commands) | `/api/commands` | Execute console commands over REST and capture their output. |
+| [WebSockets](/docs/api-reference/websockets) | `/api/instances/{id}/live-log`, `/api/console` | Live log streaming and the interactive console socket. |
+
+## Continue
+
+<CardGrid>
+<Card title="Authentication" href="/docs/api-reference/authentication">
+Bearer tokens, the `ALL` and `PUBLIC` scopes, and 401 / 403 behavior.
+</Card>
+<Card title="Instances API" href="/docs/api-reference/instances">
+The largest resource group: list, create, control, exec, and log instances.
+</Card>
+<Card title="Node API" href="/docs/api-reference/node">
+This node's status, configuration, and the unauthenticated `/api/ping` health check.
+</Card>
+<Card title="WebSockets" href="/docs/api-reference/websockets">
+Live log streaming and the interactive console over WebSocket.
+</Card>
+</CardGrid>

@@ -1,0 +1,110 @@
+---
+title: Commands API
+order: 8
+lead: 'Run console commands on the Master node over REST and read their captured output. The same command registry backs both the interactive console and this endpoint, so every console command is reachable over HTTP without terminal access.'
+description: 'Reference for the Universe commands endpoint: execute a console command on the Master node over REST and receive its captured output as JSON.'
+---
+
+The Master runs an interactive console backed by a command registry. The same registry is exposed over REST, so any command available at the terminal can be invoked over HTTP. Output written by the command is captured and returned in the response, making this the primary way to drive Universe from automation that has no shell on the host.
+
+<Callout type="warning">
+The commands endpoint requires a token with `ALL` permission.
+</Callout>
+
+## Execute a command
+
+```http title="endpoint"
+POST /api/commands/execute
+```
+
+Executes a single console command on the Master and returns the command string alongside the text it printed.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `command` | string | Console command to run on the Master, such as `instance list`. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/commands/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "instance list"}'
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "command": "instance list",
+  "output": "Instances (1):\n  a1b2c3  lobby  ONLINE  node-1  25565"
+}
+```
+
+</Fragment>
+</Tabs>
+
+| Response field | Type | Description |
+| --- | --- | --- |
+| `command` | string | Echo of the command that was run. |
+| `output` | string | Text the command printed to the console, captured as a single string. |
+
+## Common commands
+
+Commands are grouped by area. The groups below are reachable through this endpoint exactly as they are at the console.
+
+| Group | Examples |
+| --- | --- |
+| `instance` | `instance list`, `instance create <config>`, `instance stop <id>` |
+| `config` | `config list`, `config reload` |
+| `template` | `template list`, `template sync <pattern>` |
+| `cluster` | `cluster status`, `cluster nodes` |
+| `key` | `key create <label> <ALL\|PUBLIC>` |
+| `extension` | `extension list` |
+| `help` | `help` |
+
+### Discover available commands
+
+Run `help` to list every registered command on the node:
+
+```bash
+curl -X POST http://<master>:7000/api/commands/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "help"}'
+```
+
+### Create an API key
+
+Because key management is itself a console command, you can mint new tokens over REST with an existing admin key:
+
+```bash
+curl -X POST http://<master>:7000/api/commands/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "key create dashboard PUBLIC"}'
+```
+
+<Callout type="tip">
+The response captures whatever the command prints. A command that produces no output returns an empty `output` string, which is normal for fire-and-forget actions.
+</Callout>
+
+<Callout type="note">
+`POST /api/commands/execute` targets the node serving the request. To run a command on a different cluster member, use the remote dispatch endpoint on the [Cluster API](/docs/api-reference/cluster).
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="WebSockets" href="/docs/api-reference/websockets">
+Open an interactive console socket for streaming, stateful sessions.
+</Card>
+<Card title="Instances API" href="/docs/api-reference/instances">
+Send commands to a specific instance's stdin rather than the Master console.
+</Card>
+<Card title="Cluster API" href="/docs/api-reference/cluster">
+Dispatch console commands to remote nodes.
+</Card>
+</CardGrid>

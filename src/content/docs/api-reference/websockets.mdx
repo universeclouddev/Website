@@ -1,0 +1,131 @@
+---
+title: WebSockets
+order: 9
+lead: 'Two WebSocket endpoints stream data over a persistent connection: a per-instance live log stream and an interactive console to the Master. Both perform the bearer-token handshake during the HTTP upgrade and exchange plain text frames.'
+description: 'Reference for the Universe WebSocket endpoints: per-instance live log streaming and the interactive Master console, including connection URLs, authentication, and the text-frame message format.'
+---
+
+Where the REST endpoints return a snapshot, the WebSocket endpoints keep a connection open and stream text frames as events happen. There are two: a live log stream scoped to a single instance, and an interactive console attached to the Master. Both upgrade from HTTP and carry the same bearer token.
+
+<Callout type="warning">
+Both WebSocket endpoints require a token with `ALL` permission. The token is validated during the upgrade handshake; an unauthenticated handshake is rejected with `401 Unauthorized` before the socket opens.
+</Callout>
+
+## Connecting
+
+Open a WebSocket against the Master's API port and supply the token as an `Authorization` header on the handshake request. On success the server responds with `101 Switching Protocols` and the connection stays open. Messages flow as UTF-8 text frames in both directions.
+
+<Callout type="note">
+Use `ws://` against a plain HTTP Master, or `wss://` when the API is fronted by TLS. The path and authentication are identical in both cases.
+</Callout>
+
+## Live log stream
+
+```text title="connection url"
+ws://<master>:7000/api/instances/{id}/live-log
+```
+
+Streams live log output from a single instance. New log lines are pushed as text frames as the process emits them. This works across every runtime, so the stream is identical whether the instance runs under `screen`, `tmux`, a bare process, Docker, or Kubernetes.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `id` | path | The 6-character instance ID to stream. Required. |
+
+<Tabs tabs={['handshake', 'frames']}>
+<Fragment slot="0">
+
+```http title="upgrade request"
+GET /api/instances/a1b2c3/live-log HTTP/1.1
+Host: <master>:7000
+Upgrade: websocket
+Connection: Upgrade
+Authorization: Bearer YOUR_TOKEN
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```text title="incoming text frames"
+[12:00:01] [Server thread/INFO]: Starting minecraft server
+[12:00:04] [Server thread/INFO]: Done (3.1s)! For help, type "help"
+[12:01:10] [Server thread/INFO]: andyreckt joined the game
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="tip">
+For a one-time tail rather than a live stream, call `GET /api/instances/{id}/logs?lines=N` on the [Instances API](/docs/api-reference/instances) instead.
+</Callout>
+
+## Interactive console
+
+```text title="connection url"
+ws://<master>:7000/api/console
+```
+
+Opens an interactive console session to the Master. Send console commands as text frames; responses stream back as text frames. Unlike `POST /api/commands/execute`, which runs one command and returns its captured output, the console socket keeps a session open so output arrives as it is produced.
+
+<Tabs tabs={['handshake', 'session']}>
+<Fragment slot="0">
+
+```http title="upgrade request"
+GET /api/console HTTP/1.1
+Host: <master>:7000
+Upgrade: websocket
+Connection: Upgrade
+Authorization: Bearer YOUR_TOKEN
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```text title="send → / receive ←"
+→ instance list
+← Instances (1):
+←   a1b2c3  lobby  ONLINE  node-1  25565
+→ help
+← Available commands: instance, config, template, cluster, key, ...
+```
+
+</Fragment>
+</Tabs>
+
+## Client example
+
+Most WebSocket clients can set the `Authorization` header on the handshake. Using `wscat`:
+
+```bash
+# Stream live logs with wscat
+wscat -c ws://<master>:7000/api/instances/a1b2c3/live-log \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Interactive console
+wscat -c ws://<master>:7000/api/console \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+<Callout type="note">
+If your client cannot attach custom headers to the handshake, place a reverse proxy in front of the Master that injects the `Authorization` header for the upgrade request.
+</Callout>
+
+## Endpoint summary
+
+| Endpoint | Direction | Purpose |
+| --- | --- | --- |
+| `/api/instances/{id}/live-log` | server → client | Live log output for one instance. |
+| `/api/console` | client ↔ server | Interactive Master console session. |
+
+## Related
+
+<CardGrid>
+<Card title="Instances API" href="/docs/api-reference/instances">
+Fetch a one-time log tail and send commands to an instance's stdin.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+Run a single console command over REST and capture its output.
+</Card>
+<Card title="Authentication" href="/docs/api-reference/authentication">
+How the bearer token is validated during the WebSocket handshake.
+</Card>
+</CardGrid>

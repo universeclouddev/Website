@@ -1,0 +1,188 @@
+---
+title: Console commands
+order: 1
+lead: 'The full console command surface: cluster, node, instance, configuration, template, extension, and key commands, available identically over the interactive TTY, a Docker attach, or POST /api/commands/execute.'
+description: 'Complete console command reference for Universe: instance lifecycle, cluster and node status, configuration, templates, extensions, and API key management.'
+---
+
+The console runs on the Master node. `CommandBootstrap` reads `System.in` on a dedicated JLine thread, and the same command registry backs both the interactive terminal and the REST endpoint. Every command listed here behaves identically regardless of how you invoke it, and every console invocation captures its output so the REST response can return exactly what the terminal would have printed.
+
+## How commands are invoked
+
+There are three equivalent ways to run any command:
+
+<Tabs tabs={['Interactive TTY', 'Docker attach', 'REST API']}>
+<Fragment slot="0">
+
+Type directly into the running terminal. JLine provides history, editing, and tab behaviour.
+
+```text title="console"
+instance create default
+instance list
+instance stop a1b2c3
+```
+
+</Fragment>
+<Fragment slot="1">
+
+Attach to a containerised Master. This requires `stdin_open: true` and `tty: true` on the service. Detach with `Ctrl+P` then `Ctrl+Q` to leave the process running.
+
+```bash
+docker attach universe-master
+```
+
+</Fragment>
+<Fragment slot="2">
+
+Send any command over HTTP without terminal access. The captured console output is returned as a JSON array of lines.
+
+```bash
+curl -X POST http://localhost:7000/api/commands/execute \
+  -H "Authorization: Bearer unv_your_token_here" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "instance create default"}'
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+Because the REST and console paths share one registry, anything documented here is reachable through `POST /api/commands/execute`. Commands that mutate state still require an `ALL`-scoped key over REST.
+</Callout>
+
+## Cluster and node commands
+
+Cluster commands report on membership and dispatch cluster-wide actions; node commands inspect the resources of individual members.
+
+| Command | Description |
+| --- | --- |
+| `cluster status` | Show the cluster name, the local node UUID, the master flag, and a list of all member UUIDs. |
+| `cluster nodes` | List every connected node with its `nodeId` attribute and UUID. |
+| `cluster shutdown` | Dispatch a graceful shutdown task to every node in the cluster. |
+| `node info` | Show RAM and CPU usage for the local node plus its running instance count. |
+| `node resources` | Tabular view of RAM used, RAM max, CPU used, and CPU max for every node. |
+
+## Instance commands
+
+Instances are addressed by their 6-character ID, which you can read from `instance list`. Lifecycle commands dispatch tasks to the owning Wrapper; the resulting state change becomes visible in the shared instances map.
+
+| Command | Description |
+| --- | --- |
+| `instance list` | List all instances with ID, configuration name, runtime, host, port, and state. |
+| `instance create <config>` | Create one instance from the named configuration. |
+| `instance create <config> <amount>` | Create several instances at once, each placed on a resource-eligible node. |
+| `instance stop <id>` | Gracefully stop an instance by its ID. |
+| `instance kill <id>` | Force-stop an instance and immediately mark it `STOPPED`. |
+| `instance restart <id>` | Stop then recreate an instance from the same configuration. |
+| `instance info <id>` | Full details: state, host, port, PID, wrapper node, working directory, last heartbeat. |
+| `instance logs <id>` | Print the last 25 lines of the instance's `stdout.log` to the console. |
+| `instance execute <id> <cmd>` | Write a command string to the instance's stdin, for example a Minecraft server command. |
+
+Create a batch and let the scheduler distribute them:
+
+```bash title="console"
+# Create five instances from the "lobby" configuration.
+# Each one is placed on a resource-eligible node.
+instance create lobby 5
+```
+
+Inspect, restart, or force-kill a single instance:
+
+```bash title="console"
+instance info a1b2c3
+instance restart a1b2c3
+instance kill a1b2c3
+```
+
+Pipe a line straight to a running process's stdin:
+
+```bash title="console"
+# Write a line to the instance's stdin.
+# Useful for Minecraft server console commands.
+instance execute a1b2c3 say Server restarting in 60 seconds
+```
+
+<Callout type="warning">
+`instance kill` skips the graceful stop path and marks the record `STOPPED` immediately. Prefer `instance stop` for normal shutdowns so the process can flush its own state first.
+</Callout>
+
+## Configuration and template commands
+
+Configuration commands operate on the entries loaded from `./configuration/` into the cluster state. `config reload` re-reads every file on disk and pushes the result to all members, so changes propagate without a restart.
+
+| Command | Description |
+| --- | --- |
+| `config list` | List all loaded configurations with runtime and port range. |
+| `config show <name>` | Print every field of a named configuration. |
+| `config create <name> <runtime> <command>` | Create a new configuration in memory. |
+| `config reload` | Re-read all files in `./configuration/` and update the cluster state. |
+| `template list` | List all templates in `./templates/` as `<group>/<name>` pairs. |
+| `template sync <pattern> <node>` | Copy templates matching the pattern to the named target node. |
+
+Define a configuration on the fly, then reload from disk:
+
+```bash title="console"
+config create lobby screen "java -jar paper.jar"
+config reload
+```
+
+Template sync accepts a single template, a group wildcard, or everything:
+
+```bash title="console"
+# Single template
+template sync server/base node-2
+
+# Every template in a group
+template sync server/* node-2
+
+# All templates
+template sync * node-2
+```
+
+## Extension and key commands
+
+Extension commands manage the loaded extension JARs. Key commands manage API credentials; see [Security](/docs/operations/security) for how scopes and rate limiting work.
+
+| Command | Description |
+| --- | --- |
+| `extension list` | Show all installed extensions with their versions and load status. |
+| `extension reload` | Call `onReload()` on every reloadable extension. |
+| `key list` | List all registered keys: ID, permission level, and masked token. |
+| `key create <keyId> <permission>` | Create a new key. The full token prints once and cannot be retrieved later. |
+| `key delete <keyId>` | Permanently delete a key by its human-readable ID. |
+
+Valid permission values are `ALL` (full administrative access) and `PUBLIC` (rate-limited, read-only):
+
+```bash title="console"
+key create ci-pipeline ALL
+key list
+key delete ci-pipeline
+```
+
+<Callout type="tip">
+The token from `key create` is shown exactly once. Copy it into a secrets manager immediately, since there is no way to recover it afterward.
+</Callout>
+
+## System commands
+
+| Command | Description |
+| --- | --- |
+| `help` | Print all available commands with brief descriptions. |
+| `stop` · `exit` | Trigger a graceful shutdown of the local Universe node. |
+
+## Related
+
+<CardGrid>
+<Card title="Logging" href="/docs/operations/logging">
+Retrieve instance logs, stream live output over WebSocket, and tune log levels.
+</Card>
+<Card title="Security" href="/docs/operations/security">
+API keys, bearer tokens, and the `ALL` versus `PUBLIC` scopes.
+</Card>
+<Card title="Networking" href="/docs/operations/networking">
+REST and Hazelcast ports, cross-node connectivity, and firewall guidance.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+The `POST /api/commands/execute` endpoint and its response schema.
+</Card>
+</CardGrid>

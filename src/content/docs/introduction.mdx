@@ -1,0 +1,64 @@
+---
+title: Introduction
+order: 1
+lead: 'Universe is a single-JAR cluster orchestrator that deploys and manages application instances across Master and Wrapper nodes, using Hazelcast for task dispatch and a Ktor REST API for control.'
+description: 'Universe is a single-JAR cluster orchestrator that deploys instances across Master and Wrapper nodes via Hazelcast task dispatch and a Ktor REST API.'
+---
+
+The whole system ships as one fat JAR. A node reads its `config.json` at startup and assumes one of two roles: a **Master** that owns cluster state and exposes the REST API, or a **Wrapper** that receives tasks and launches processes. There is no separate control plane to install, no message broker to run, and no database required to get started. A single machine can be the entire cluster.
+
+<Callout type="tip">
+New here? The [Quickstart](/docs/quickstart) takes you from `./gradlew build` to a running instance in about ten minutes.
+</Callout>
+
+## Core capabilities
+
+Universe is deliberately small at its core and extends through self-registering JARs. The base distribution gives you everything needed to template, deploy, and observe instances across a fleet:
+
+- **Single-JAR deployment.** Master and Wrapper nodes run the identical artifact; the `isMasterNode` flag in `config.json` decides the role.
+- **Pluggable runtimes.** `screen`, `tmux`, and `process` are built in; `docker` and `k8s` arrive as extensions.
+- **Template system.** Instances are built from versioned file-tree templates with dynamic variable substitution: `%PORT%`, `%INSTANCE_ID%`, `%HOST_ADDRESS%`, and any custom keys you define.
+- **REST + WebSocket API.** Built on Ktor 3.4.3 for lifecycle control, log retrieval, live log streaming, and cluster inspection.
+- **Extension architecture.** Drop a JAR into `./extensions` and it registers its own runtimes, storage backends, template variables, and integrations on load.
+- **First-class Minecraft support.** Plugins for Paper, Spigot, Velocity, BungeeCord, and Folia let proxies auto-register backends.
+
+## How it fits together
+
+The Master holds all authoritative state in a Hazelcast `IMap` and exposes it over HTTP. When you create an instance, the Master selects a Wrapper, writes a `CREATING` record, and dispatches a task over Hazelcast's `IExecutorService`. The Wrapper copies the resolved template tree, replaces variables, starts the process through the chosen runtime, and writes the `ONLINE` state straight back to the shared map. The [Architecture](/docs/architecture) page traces this path end to end.
+
+## What you can run
+
+Universe suits any workload made of distributed JVM (or process-based) services spread across machines:
+
+- Minecraft server networks: lobbies, game servers, and proxies that auto-wire together.
+- Microservice clusters that need template-driven, port-managed process placement.
+- CI/CD and ephemeral build environments spun up and torn down on demand.
+- Edge and multi-node compute where a mesh network injects per-node addresses.
+
+## Project modules
+
+The codebase is split into a few focused modules:
+
+| Module | Responsibility |
+| --- | --- |
+| api | Shared DTOs and interfaces like `InstanceInfo`, `Configuration`, `RuntimeProvider`, and the task objects exchanged between nodes. |
+| app | Core orchestrator: Hazelcast, cluster state, the Ktor server, template manager, task routing, port allocation, and the built-in runtimes. |
+| loader | Bootstrap classloader: extracts the embedded `app.jarinjar`, downloads runtime dependencies, and invokes the orchestrator. |
+| extensions | Optional modules: S3 storage, PostgreSQL, Prometheus metrics, Discord, and the Docker / Kubernetes runtimes. |
+
+## Where to next
+
+<CardGrid>
+<Card title="Quickstart" href="/docs/quickstart">
+Build the JAR, write your first config and template, and deploy a running instance.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+Master/Wrapper topology, Hazelcast task dispatch, and the instance lifecycle.
+</Card>
+<Card title="Node configuration" href="/docs/configuration/node-config">
+Every field in `config.json` and how a node picks its role.
+</Card>
+<Card title="API reference" href="/docs/api-reference/overview">
+Endpoint reference, request/response schemas, and WebSocket streams.
+</Card>
+</CardGrid>

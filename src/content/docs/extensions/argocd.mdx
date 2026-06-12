@@ -1,0 +1,83 @@
+---
+title: ArgoCD
+order: 7
+lead: 'The ArgoCD extension exports Universe''s runtime state as Kubernetes manifests every 60 seconds, writing ConfigMaps, Deployments, and a kustomization.yaml into ./argocd-manifests/. ArgoCD then tracks drift and history without taking over Universe''s instance lifecycle.'
+description: 'Export Universe state as Kubernetes manifests for ArgoCD: generated ConfigMaps, Deployments, and a kustomization file, plus the sync policy that avoids lifecycle conflicts.'
+---
+
+This extension bridges Universe and ArgoCD by rendering the orchestrator's live state into Kubernetes manifests on disk. It does not hand instance lifecycle to Kubernetes; Universe still starts and stops instances. Instead, the exported manifests give ArgoCD a view of desired versus actual state so it can surface drift and keep a deployment history through Git.
+
+## What it generates
+
+Every 60 seconds the extension writes a fresh set of manifests to `./argocd-manifests/`:
+
+```text title="./argocd-manifests/"
+./argocd-manifests/
+  universe-config-lobby.yaml      ← one ConfigMap per Configuration
+  universe-config-proxy.yaml
+  universe-instance-a1b2c3.yaml   ← one Deployment per active instance
+  kustomization.yaml              ← lists every generated file
+```
+
+| Manifest | Per | Contents |
+| --- | --- | --- |
+| ConfigMap | Configuration | The full configuration JSON under `data.configuration.json`. |
+| Deployment | Active instance | Instance ID, configuration name, environment variables, and container port. |
+| kustomization.yaml | Whole export | A Kustomize manifest listing every generated file for a single ArgoCD application. |
+
+## Manifest shape
+
+A ConfigMap is emitted for each Universe Configuration:
+
+```yaml title="universe-config-lobby.yaml"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: universe-config-lobby
+  namespace: universe
+```
+
+A Deployment is emitted for each active instance, labeled with its instance ID:
+
+```yaml title="universe-instance-a1b2c3.yaml"
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: universe-instance-a1b2c3
+  labels:
+    universe.scala.gg/instance-id: "a1b2c3"
+```
+
+## Installation
+
+There is no `config.json` for this extension. Include `extension-argocd.jar` in `./extensions/` to activate it, and remove the JAR to disable it. Point an ArgoCD Application at the directory (or the Git repo you commit it to) and let it reconcile from the `kustomization.yaml`.
+
+<Callout type="warning">
+Set `selfHeal: false` in the ArgoCD sync policy. Universe owns the instance lifecycle, so letting ArgoCD self-heal would fight Universe over instance startup and shutdown.
+</Callout>
+
+```yaml title="ArgoCD Application sync policy"
+spec:
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false
+```
+
+## Responsibility split
+
+- **Universe** starts and stops instances and remains the source of lifecycle truth.
+- **ArgoCD** tracks desired versus actual state and raises drift alerts.
+- **Git** holds the persistent history of exported manifests.
+
+<CardGrid>
+<Card title="GitOps" href="/docs/extensions/gitops">
+Feed templates and configs into Universe from Git, the inbound side of the loop.
+</Card>
+<Card title="Kubernetes runtime" href="/docs/runtimes/kubernetes">
+Run instances as Pods through the Kubernetes runtime extension.
+</Card>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+How extensions load and what they can register.
+</Card>
+</CardGrid>

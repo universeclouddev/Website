@@ -1,0 +1,64 @@
+---
+interface Props {
+	tabs: string[];
+}
+const { tabs } = Astro.props;
+---
+
+<div class="doc-tabs" data-doc-tabs>
+	<div class="doc-tabs-nav">
+		{
+			tabs.map((t, i) => (
+				<button
+					type="button"
+					class:list={['doc-tab-btn', i === 0 && 'is-active']}
+					data-doc-tab={String(i)}
+				>
+					{t}
+				</button>
+			))
+		}
+	</div>
+	{
+		tabs[0] && (
+			<div class="doc-tab-panel" data-doc-panel="0">
+				<slot name="0" />
+			</div>
+		)
+	}
+	{
+		tabs[1] && (
+			<div class="doc-tab-panel" data-doc-panel="1" hidden>
+				<slot name="1" />
+			</div>
+		)
+	}
+	{
+		tabs[2] && (
+			<div class="doc-tab-panel" data-doc-panel="2" hidden>
+				<slot name="2" />
+			</div>
+		)
+	}
+	{
+		tabs[3] && (
+			<div class="doc-tab-panel" data-doc-panel="3" hidden>
+				<slot name="3" />
+			</div>
+		)
+	}
+	{
+		tabs[4] && (
+			<div class="doc-tab-panel" data-doc-panel="4" hidden>
+				<slot name="4" />
+			</div>
+		)
+	}
+	{
+		tabs[5] && (
+			<div class="doc-tab-panel" data-doc-panel="5" hidden>
+				<slot name="5" />
+			</div>
+		)
+	}
+</div>

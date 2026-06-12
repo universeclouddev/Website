@@ -1,0 +1,356 @@
+---
+title: Instances API
+order: 3
+lead: 'Deploy, control, inspect, and stop instances across the cluster. Instance state lives in the Master Hazelcast IMap; these endpoints read it directly and dispatch control actions to the owning Wrapper. Every route on this page requires a key with ALL permission.'
+description: 'Reference for the Universe instance endpoints: list, get, create, delete, lifecycle control, state updates, stdin command execution, and log retrieval.'
+---
+
+An instance is a single running process managed by a Wrapper node. Its record, an `InstanceInfo` object, is stored in the Master's distributed instances map and shared across the cluster. These endpoints expose that record and the control actions that mutate it.
+
+<Callout type="warning">
+Every endpoint on this page requires a token with `ALL` permission. There are no public instance reads. A request without a valid admin token returns `401 Unauthorized`.
+</Callout>
+
+## The InstanceInfo object
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | string | Unique 6-character instance ID. |
+| `configurationName` | string | Name of the configuration this instance was deployed from. |
+| `wrapperNodeId` | string | ID of the node hosting this instance. |
+| `hostAddress` | string | Host address clients should connect to. |
+| `allocatedPort` | integer | Port allocated for this instance. |
+| `state` | enum | One of `CREATING`, `ONLINE`, `OFFLINE`, `STOPPED`. |
+| `lastHeartbeat` | int64 | Unix timestamp of the last heartbeat. |
+| `processPid` | int64, nullable | Process ID; `null` for container runtimes. |
+| `allocatedRamMB` | integer | Allocated RAM in MB. |
+| `allocatedCpu` | integer | Allocated CPU units (100 = 1 core). |
+| `runtime` | string | Runtime provider used (`screen`, `tmux`, `process`, `docker`, `k8s`). |
+
+### Instance states
+
+| State | Meaning |
+| --- | --- |
+| `CREATING` | Instance is being deployed; the record exists but the process is not yet running. |
+| `ONLINE` | Instance is running and reporting heartbeats. |
+| `OFFLINE` | Instance has missed heartbeats, typically because its Wrapper left the cluster. |
+| `STOPPED` | Instance has been deliberately stopped. |
+
+## List instances
+
+```http title="endpoint"
+GET /api/instances
+```
+
+Returns every instance across the cluster, active and stopped, as a JSON array.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/instances \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+[
+  {
+    "id": "a1b2c3",
+    "configurationName": "lobby",
+    "wrapperNodeId": "node-1",
+    "hostAddress": "127.0.0.1",
+    "allocatedPort": 25565,
+    "state": "ONLINE",
+    "lastHeartbeat": 1718000000000,
+    "processPid": 12345,
+    "allocatedRamMB": 2048,
+    "allocatedCpu": 100,
+    "runtime": "screen"
+  }
+]
+```
+
+</Fragment>
+</Tabs>
+
+## Get an instance
+
+```http title="endpoint"
+GET /api/instances/{id}
+```
+
+Returns a single `InstanceInfo` by ID.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `id` | path | 6-character instance ID. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/instances/a1b2c3 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "id": "a1b2c3",
+  "configurationName": "lobby",
+  "wrapperNodeId": "node-1",
+  "hostAddress": "127.0.0.1",
+  "allocatedPort": 25565,
+  "state": "ONLINE",
+  "lastHeartbeat": 1718000000000,
+  "processPid": 12345,
+  "allocatedRamMB": 2048,
+  "allocatedCpu": 100,
+  "runtime": "screen"
+}
+```
+
+</Fragment>
+</Tabs>
+
+## Create an instance
+
+```http title="endpoint"
+POST /api/instances
+```
+
+Deploys a new instance from an existing configuration. The Master selects an eligible Wrapper, allocates a port, writes the record with `state: CREATING`, and dispatches the deploy task. The response returns immediately with the new record; the state advances to `ONLINE` once the Wrapper finishes starting the process.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `configurationName` | string | Name of the configuration to deploy. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/instances \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"configurationName": "lobby"}'
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="201 Created"
+{
+  "id": "a1b2c3",
+  "configurationName": "lobby",
+  "wrapperNodeId": "node-1",
+  "hostAddress": "127.0.0.1",
+  "allocatedPort": 25565,
+  "state": "CREATING",
+  "lastHeartbeat": 1718000000000,
+  "processPid": null,
+  "allocatedRamMB": 2048,
+  "allocatedCpu": 100,
+  "runtime": "screen"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+An unknown `configurationName` returns `400 Bad Request`. List the available names with [GET /api/configurations](/docs/api-reference/configurations).
+</Callout>
+
+## Stop and delete an instance
+
+```http title="endpoint"
+DELETE /api/instances/{id}
+```
+
+Stops the instance and removes it from the cluster. The Master dispatches a stop task to the owning Wrapper, which terminates the process and cleans up the working directory unless the configuration is `static`.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X DELETE http://<master>:7000/api/instances/a1b2c3 \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "message": "Instance stopped",
+  "instanceId": "a1b2c3"
+}
+```
+
+</Fragment>
+</Tabs>
+
+## Control the lifecycle
+
+```http title="endpoint"
+PATCH /api/instances/{id}/lifecycle?target=<start|stop|restart>
+```
+
+Changes the lifecycle of an existing instance without deleting its record. Use this to stop a running instance, start a stopped one, or restart in place.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `id` | path | Instance ID. Required. |
+| `target` | query | One of `start`, `stop`, `restart`. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X PATCH "http://<master>:7000/api/instances/a1b2c3/lifecycle?target=restart" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "message": "Lifecycle change dispatched",
+  "instanceId": "a1b2c3",
+  "target": "restart"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+An unknown `target` value or a missing instance returns `400 Bad Request`.
+</Callout>
+
+## Update instance state
+
+```http title="endpoint"
+PUT /api/instances/{id}/state
+```
+
+Updates the `state` and optional `lastHeartbeat` of an instance record directly. This is primarily used by Wrappers and tooling to report heartbeats; most operators should prefer the lifecycle endpoint above.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `state` | enum | New state: `CREATING`, `ONLINE`, `OFFLINE`, or `STOPPED`. Required. |
+| `lastHeartbeat` | int64 | Unix timestamp. Optional; reset if omitted. |
+
+```bash
+curl -X PUT http://<master>:7000/api/instances/a1b2c3/state \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"state": "ONLINE", "lastHeartbeat": 1718000123456}'
+```
+
+Returns the updated `InstanceInfo` with status `200 OK`.
+
+## Execute a command on an instance
+
+```http title="endpoint"
+POST /api/instances/{id}/execute
+```
+
+Sends a command to the instance's stdin. The command is piped directly into the running process (for example a Minecraft server console), so the syntax is whatever the process expects.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `command` | string | Command to write to the process stdin. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/instances/a1b2c3/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "op andyreckt"}'
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "message": "Command dispatched",
+  "instanceId": "a1b2c3",
+  "command": "op andyreckt"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="tip">
+The response confirms the command was dispatched, not its result. To watch the effect, stream output from the [live-log WebSocket](/docs/api-reference/websockets) while you send commands.
+</Callout>
+
+## Fetch logs
+
+```http title="endpoint"
+GET /api/instances/{id}/logs?lines=<1-1000>
+```
+
+Returns the most recent log lines for an instance. Works with every runtime, including Docker, Kubernetes, `screen`, `tmux`, and bare processes.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `id` | path | Instance ID. Required. |
+| `lines` | query | Number of lines to return. Default `100`, minimum `1`, maximum `1000`. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl "http://<master>:7000/api/instances/a1b2c3/logs?lines=100" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "lines": [
+    "[12:00:01] [Server thread/INFO]: Starting minecraft server",
+    "[12:00:04] [Server thread/INFO]: Done (3.1s)! For help, type \"help\""
+  ],
+  "totalLines": 2,
+  "instanceId": "a1b2c3"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+For continuous output rather than a one-time tail, open the live-log WebSocket at `/api/instances/{id}/live-log`. See the [WebSockets](/docs/api-reference/websockets) page.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Configurations API" href="/docs/api-reference/configurations">
+Manage the configuration definitions instances are deployed from.
+</Card>
+<Card title="WebSockets" href="/docs/api-reference/websockets">
+Stream live logs and drive an interactive console over WebSocket.
+</Card>
+<Card title="Commands API" href="/docs/api-reference/commands">
+Run console commands such as `instance list` over REST.
+</Card>
+<Card title="API overview" href="/docs/api-reference/overview">
+Base URL, response conventions, and status codes.
+</Card>
+</CardGrid>

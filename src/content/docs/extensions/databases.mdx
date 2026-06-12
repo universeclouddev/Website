@@ -1,0 +1,109 @@
+---
+title: Database extensions
+order: 3
+lead: 'Database extensions register a DatabaseProvider under a provider key, replacing the built-in H2 and MySQL backends. PostgreSQL, MongoDB, and Redis each ship as a separate JAR and are selected through ./database.json.'
+description: 'PostgreSQL, MongoDB, and Redis backends for Universe: what each persists, their connection config keys, and how to select a provider in database.json.'
+---
+
+Universe ships with two built-in database providers, H2 and MySQL. Three more are available as extensions: PostgreSQL, MongoDB, and Redis. Each registers a `DatabaseProvider` under its provider key during `onLoad()`. To switch backends, drop the matching JAR into `./extensions/` and set the `provider` key in `./database.json`.
+
+<Callout type="warning">
+Switching database backends does not migrate existing data. Universe starts with an empty database under the new provider, so export or re-create anything you need before changing the `provider` key.
+</Callout>
+
+## Provider configuration
+
+<Tabs tabs={['PostgreSQL', 'MongoDB', 'Redis']}>
+<Fragment slot="0">
+
+**`extension-db-postgres`** is a production-grade relational backend suited to multi-node clusters with concurrent writes. It uses jOOQ with the PostgreSQL dialect for SQL.
+
+```json title="database.json"
+{
+	"provider": "postgres",
+	"host": "127.0.0.1",
+	"port": 5432,
+	"database": "universe",
+	"username": "universe",
+	"password": "changeme"
+}
+```
+
+| Field | Description |
+| --- | --- |
+| provider | Must be `"postgres"`. |
+| host | Server hostname or IP. |
+| port | Default `5432`. |
+| database | Database name. |
+| username | Database user. |
+| password | Database password. |
+
+</Fragment>
+<Fragment slot="1">
+
+**`extension-db-mongodb`** is a document-oriented backend with BSON storage and schema flexibility. It supports both authenticated (SCRAM) and unauthenticated connections.
+
+```json title="database.json"
+{
+	"provider": "mongodb",
+	"host": "127.0.0.1",
+	"port": 27017,
+	"database": "universe",
+	"username": "",
+	"password": ""
+}
+```
+
+| Field | Description |
+| --- | --- |
+| provider | Must be `"mongodb"`. |
+| host | Server hostname or IP. |
+| port | Default `27017`. |
+| database | Database name. |
+| username | SCRAM user. Leave empty for an unauthenticated connection. |
+| password | User password. Leave empty for an unauthenticated connection. |
+
+</Fragment>
+<Fragment slot="2">
+
+**`extension-db-redis`** is an in-memory store for sub-millisecond lookups and ephemeral data. It uses the Lettuce client for non-blocking, reactive operations.
+
+```json title="database.json"
+{
+	"provider": "redis",
+	"host": "127.0.0.1",
+	"port": 6379,
+	"username": "",
+	"password": ""
+}
+```
+
+| Field | Description |
+| --- | --- |
+| provider | Must be `"redis"`. |
+| host | Server hostname or IP. |
+| port | Default `6379`. |
+| username | ACL username for Redis 6+ (optional). |
+| password | AUTH password (optional). |
+| database | Ignored by the Redis provider. |
+
+</Fragment>
+</Tabs>
+
+## Choosing a backend
+
+- **PostgreSQL** for clusters that need durable, concurrent relational writes. The default choice for production.
+- **MongoDB** when you prefer document storage and want to avoid managing a schema.
+- **Redis** for fast, ephemeral lookups where persistence guarantees matter less.
+
+<CardGrid>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+How a provider JAR is discovered and registered at startup.
+</Card>
+<Card title="Database" href="/docs/configuration/database">
+The built-in H2 and MySQL providers and the database.json schema.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Implement DatabaseProvider for a backend not listed here.
+</Card>
+</CardGrid>

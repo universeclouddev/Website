@@ -1,0 +1,306 @@
+---
+title: Templates API
+order: 5
+lead: 'Browse template trees, edit and manage their files, and sync template storage. Templates are file trees under ./templates/<group>/<name>/ that Universe copies into an instance working directory before launch. These endpoints expose listing, per-file CRUD, zip import/export, and storage sync.'
+description: 'Reference for the Universe template endpoints: list templates and files, read and edit files, import and export zips, and sync from storage providers or across the cluster.'
+---
+
+Templates are organized by `group` and `name`. The pair identifies a directory tree under `./templates/<group>/<name>/` that gets copied into an instance's working directory at deploy time, with `%VARIABLE%` placeholders replaced in the files listed under the configuration's `fileModifications`.
+
+<Callout type="warning">
+All template endpoints require a token with `ALL` permission.
+</Callout>
+
+## Browse templates
+
+### List all templates
+
+```http title="endpoint"
+GET /api/templates
+```
+
+Returns all available templates grouped by `group`.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/templates \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+[
+  {
+    "group": "server",
+    "templates": [
+      { "name": "base", "group": "server", "storage": "local", "priority": 0 },
+      { "name": "lobby", "group": "server", "storage": "local", "priority": 1 }
+    ]
+  }
+]
+```
+
+</Fragment>
+</Tabs>
+
+### Get template details
+
+```http title="endpoint"
+GET /api/templates/{group}/{name}
+```
+
+Returns the resolved path and existence flag for a single template.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `group` | path | Template group. Required. |
+| `name` | path | Template name. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/templates/server/base \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "group": "server",
+  "name": "base",
+  "path": "./templates/server/base",
+  "exists": true
+}
+```
+
+</Fragment>
+</Tabs>
+
+## Template files
+
+### List files
+
+```http title="endpoint"
+GET /api/templates/{group}/{name}/files
+```
+
+Returns every file inside a local template directory as a flat list of relative paths.
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl http://<master>:7000/api/templates/server/base/files \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "group": "server",
+  "name": "base",
+  "files": [
+    "server.properties",
+    "server.jar",
+    "plugins/Universe.jar"
+  ]
+}
+```
+
+</Fragment>
+</Tabs>
+
+### Read a file
+
+```http title="endpoint"
+GET /api/templates/{group}/{name}/files/{path}
+```
+
+Returns the raw contents of a file within a template as `text/plain`. The `path` segment is the file path relative to the template root, for example `server.properties`.
+
+```bash
+curl http://<master>:7000/api/templates/server/base/files/server.properties \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+<Callout type="note">
+A path that does not resolve to a file returns `404 Not Found`.
+</Callout>
+
+### Edit a file
+
+```http title="endpoint"
+PATCH /api/templates/{group}/{name}/files/{path}
+```
+
+Replaces the contents of an existing file. The request body is the new file content sent as `text/plain`. Returns `200 OK` with the affected path.
+
+```bash
+curl -X PATCH http://<master>:7000/api/templates/server/base/files/server.properties \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: text/plain" \
+  --data-binary @server.properties
+```
+
+### Create a file
+
+```http title="endpoint"
+POST /api/templates/{group}/{name}/files/{path}
+```
+
+Creates a new file inside the template. The body accepts any content type, including binary assets, jars, and images, sent as `application/octet-stream`. Returns `201 Created` on success.
+
+```bash
+curl -X POST http://<master>:7000/api/templates/server/base/files/icon.png \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @icon.png
+```
+
+<Callout type="warning">
+Creation fails with `409 Conflict` if the target file already exists. Use `PATCH` to overwrite an existing file.
+</Callout>
+
+### Delete a file
+
+```http title="endpoint"
+DELETE /api/templates/{group}/{name}/files/{path}
+```
+
+Removes a file from a local template. Returns `200 OK` with the deleted path.
+
+```bash
+curl -X DELETE http://<master>:7000/api/templates/server/base/files/old.txt \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+## Import and export
+
+### Export as zip
+
+```http title="endpoint"
+POST /api/templates/{group}/{name}/export
+```
+
+Packages a local template into a zip and returns it as `application/zip`. A template that does not exist returns `404 Not Found`.
+
+```bash
+curl -X POST http://<master>:7000/api/templates/server/base/export \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -o base.zip
+```
+
+### Import from zip
+
+```http title="endpoint"
+POST /api/templates/{group}/{name}/import
+```
+
+Unpacks a zip archive into the template directory, overwriting existing files. Send the archive as `application/zip`.
+
+```bash
+curl -X POST http://<master>:7000/api/templates/server/base/import \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/zip" \
+  --data-binary @base.zip
+```
+
+## Storage sync
+
+### Sync one template from a storage provider
+
+```http title="endpoint"
+POST /api/templates/{group}/{name}/sync
+```
+
+Downloads the latest version of a single template from a remote storage provider (for example `s3` or `ftp`) into the local template directory.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `storage` | string | Storage provider key, such as `s3`. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/templates/server/base/sync \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"storage": "s3"}'
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "message": "Template synced",
+  "group": "server",
+  "name": "base",
+  "storage": "s3"
+}
+```
+
+</Fragment>
+</Tabs>
+
+<Callout type="note">
+A provider key that is not registered returns `400 Bad Request`. Storage providers are contributed by extensions such as the S3 storage extension.
+</Callout>
+
+### Sync templates across the cluster
+
+```http title="endpoint"
+POST /api/templates/sync
+```
+
+Dispatches a template sync task to the cluster over Hazelcast so Wrapper nodes receive matching template trees. The `pattern` selects which templates to sync, for example `server/*` or `group/name`. The response confirms dispatch; the actual copy happens asynchronously on each node.
+
+| Body field | Type | Description |
+| --- | --- | --- |
+| `pattern` | string | Template pattern to sync, such as `default/*` or `group/name`. Required. |
+
+<Tabs tabs={['curl', 'response']}>
+<Fragment slot="0">
+
+```bash
+curl -X POST http://<master>:7000/api/templates/sync \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"pattern": "server/*"}'
+```
+
+</Fragment>
+<Fragment slot="1">
+
+```json title="200 OK"
+{
+  "message": "Template sync dispatched"
+}
+```
+
+</Fragment>
+</Tabs>
+
+## Related
+
+<CardGrid>
+<Card title="Configurations API" href="/docs/api-reference/configurations">
+Reference templates from a configuration's `templateInstallationConfig`.
+</Card>
+<Card title="Cluster API" href="/docs/api-reference/cluster">
+Discover the nodes that template sync tasks are dispatched to.
+</Card>
+<Card title="API overview" href="/docs/api-reference/overview">
+Base URL, response conventions, and status codes.
+</Card>
+</CardGrid>

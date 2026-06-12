@@ -1,0 +1,95 @@
+---
+title: Metrics
+order: 4
+lead: 'Two metrics extensions implement the MetricsProvider interface on top of Micrometer: Prometheus is pull-based and exposes a scrape endpoint, InfluxDB 2.x is push-based and writes on an interval. Both export the same Universe metrics, so only one can be active at a time.'
+description: 'Prometheus and InfluxDB export for Universe: the scrape endpoint, the push config, and the exported instance, node, and JVM metrics.'
+---
+
+The metrics extensions surface Universe's runtime state to your observability stack. Both are built on Micrometer and register the same set of Universe-specific gauges plus the standard JVM and system binders. They differ only in delivery: Prometheus scrapes a REST endpoint, InfluxDB receives pushed line-protocol writes.
+
+<Callout type="warning">
+Only one `MetricsProvider` can be active at a time. Install either the Prometheus JAR or the InfluxDB JAR, not both.
+</Callout>
+
+## Exported metrics
+
+Both extensions record the same Universe-specific metrics:
+
+| Metric | Type | Tags | Meaning |
+| --- | --- | --- | --- |
+| `universe.instances` | Gauge | `state=online/offline/stopped` | Instance counts by state. |
+| `universe.nodes` | Gauge | none | Total connected nodes. |
+| `universe.configs` | Gauge | none | Loaded configurations. |
+| `universe.node.ram` | Gauge | `node_id=...` | RAM per node, in MB. |
+| `universe.node.cpu` | Gauge | `node_id=...` | CPU per node, from 0.0 to 1.0. |
+
+Both extensions also auto-register Micrometer's JVM and system binders, adding memory, GC, thread, CPU, and uptime metrics with no extra configuration.
+
+## Choosing a backend
+
+<Tabs tabs={['Prometheus', 'InfluxDB']}>
+<Fragment slot="0">
+
+Place `extension-metrics-prometheus.jar` in `./extensions/`. No config file is needed. The Master exposes an unauthenticated scrape endpoint in standard Prometheus exposition format:
+
+```http title="scrape endpoint"
+GET http://<master-host>:7000/api/metrics
+```
+
+Point Prometheus at it:
+
+```yaml title="prometheus.yml"
+scrape_configs:
+  - job_name: 'universe'
+    static_configs:
+      - targets: ['localhost:7000']
+    metrics_path: '/api/metrics'
+```
+
+The endpoint returns plain text:
+
+```text title="GET /api/metrics"
+universe_instances{state="online"} 5.0
+universe_nodes 2.0
+universe_node_ram_megabytes{node_id="node-1"} 1024.0
+jvm_memory_used_bytes{area="heap",id="G1 Eden Space"} 6.7108864E7
+```
+
+</Fragment>
+<Fragment slot="1">
+
+Place `extension-metrics-influxdb.jar` in `./extensions/` and create `./extensions/metrics-influxdb/config.json`. Universe pushes metrics to InfluxDB 2.x on the configured interval:
+
+```json title="extensions/metrics-influxdb/config.json"
+{
+	"url": "http://localhost:8086",
+	"token": "your-influxdb-token",
+	"org": "universe",
+	"bucket": "metrics",
+	"intervalSeconds": 15
+}
+```
+
+| Field | Default | Description |
+| --- | --- | --- |
+| url | `"http://localhost:8086"` | InfluxDB server URL. |
+| token | `""` | InfluxDB API token (required). |
+| org | `"universe"` | Organisation name. |
+| bucket | `"metrics"` | Target bucket. |
+| intervalSeconds | `15` | Push interval. |
+
+<Callout type="info">
+With InfluxDB, metrics are pushed from Universe rather than scraped, so the Master does not need to be reachable from your monitoring host. Only InfluxDB must be reachable from Universe.
+</Callout>
+
+</Fragment>
+</Tabs>
+
+<CardGrid>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+How a metrics provider registers itself at startup.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Implement MetricsProvider to export to another backend.
+</Card>
+</CardGrid>

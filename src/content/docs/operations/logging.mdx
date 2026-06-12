@@ -1,0 +1,132 @@
+---
+title: Logging
+order: 2
+lead: 'Where Universe writes logs, how to pull an instance tail or stream it live over WebSocket, the two separate logging channels, and how the debug flag changes log levels.'
+description: 'Universe logging reference: log file locations and rotation, the console and SLF4J channels, retrieving instance logs over REST, live streaming via WebSocket, and log levels.'
+---
+
+Universe keeps two logging channels apart. Operator-facing console output is styled and written to stdout through JLine; framework diagnostics from Hazelcast, Docker, Kubernetes, and Netty go through an SLF4J and Logback pipeline into rotating files. Console output is not captured in the log file, so the file on disk contains only the framework records.
+
+## Where logs live
+
+The active framework log sits at `./logs/universe.log` relative to the JAR working directory. Under Docker with the data directory mounted at `/data`, that path becomes `/data/logs/universe.log`. Logback rotates daily and keeps 30 days of history before deleting old files. Each instance's captured process output lives separately under its working directory.
+
+```text title="logs and process output"
+./logs/universe.log              ← active framework log
+./logs/universe-2026-06-11.log   ← rotated daily, kept 30 days
+./running/<id>/stdout.log        ← captured process output per instance
+```
+
+Every framework line follows the same format:
+
+```text title="log format"
+HH:mm:ss.SSS [thread-name] LEVEL  logger.name - message
+```
+
+<Callout type="note">
+`instance logs <id>` and the REST log endpoint read from the per-instance `stdout.log` under `./running/<id>/`, not from `./logs/universe.log`. The framework log and the instance logs are independent.
+</Callout>
+
+## Retrieving instance logs
+
+The console prints a short tail; the REST API returns a configurable number of recent lines as a JSON array. Both target a specific instance by its 6-character ID.
+
+<Tabs tabs={['Console', 'REST API']}>
+<Fragment slot="0">
+
+The console command prints the last 25 lines of the instance's captured output.
+
+```bash title="console"
+# Last 25 lines from the instance's stdout.log
+instance logs a1b2c3
+```
+
+</Fragment>
+<Fragment slot="1">
+
+The `lines` query parameter defaults to 100 and the response is a JSON array of log strings. The request needs a bearer token.
+
+```bash
+# Last N lines, returned as a JSON array of strings (lines defaults to 100)
+curl -H "Authorization: Bearer unv_your_token_here" \
+  "http://localhost:7000/api/instances/a1b2c3/logs?lines=100"
+```
+
+</Fragment>
+</Tabs>
+
+## Live log streaming
+
+For continuous output, open a WebSocket to the live-log endpoint. Each message carries exactly one log line, and the connection stays open until the instance stops or the client disconnects.
+
+```text title="endpoint"
+WS /api/instances/{id}/live-log
+```
+
+Authentication happens during the HTTP upgrade handshake: send the bearer token in the `Authorization` header. Query-parameter tokens are not accepted on this endpoint.
+
+```bash
+# Each message is one log line; the socket stays open
+# until the instance stops or the client disconnects.
+wscat -c "ws://localhost:7000/api/instances/a1b2c3/live-log" \
+  -H "Authorization: Bearer unv_your_token_here"
+```
+
+<Callout type="warning">
+Browser clients cannot set arbitrary WebSocket headers. To stream live logs from a browser dashboard, place a reverse proxy in front that converts a query parameter into the `Authorization` header before forwarding the handshake.
+</Callout>
+
+## Log levels and debug mode
+
+The bundled `universe-logback.xml` pins noisy framework loggers to `WARN` while Universe's own logging runs at `INFO`. Override any level by adding logger elements to a custom `logback.xml` on the classpath.
+
+```xml title="universe-logback.xml"
+<logger name="com.hazelcast"          level="WARN"/>
+<logger name="io.fabric8.kubernetes"  level="WARN"/>
+<logger name="com.github.dockerjava"  level="WARN"/>
+<logger name="org.apache.http"        level="WARN"/>
+<logger name="software.amazon.awssdk" level="WARN"/>
+```
+
+Set `"debug": true` in `./config.json` and restart to widen output. Debug mode noticeably increases the volume from Hazelcast and Netty.
+
+```json title="config.json"
+{
+  "debug": true
+}
+```
+
+| Setting | Effect |
+| --- | --- |
+| `debug: false` | Console shows `INFO` and above; the Logback console shows `WARN` and above only. |
+| `debug: true` | Console adds `DEBUG`; the Logback console shows `INFO` and above across all loggers. |
+
+## Reading the orchestrator's own logs
+
+When Universe runs in a container, its framework output is also available through the Docker log driver. You can follow the container or read the rotated file directly on the host.
+
+```bash
+# Follow the orchestrator's own output
+docker logs -f universe-master
+docker logs --tail=200 universe-master
+
+# Read the rotating file directly if ./data is volume-mounted
+tail -f ./data/logs/universe.log
+```
+
+## Related
+
+<CardGrid>
+<Card title="Console commands" href="/docs/operations/console-commands">
+Every console command, including `instance logs <id>` and lifecycle control.
+</Card>
+<Card title="Security" href="/docs/operations/security">
+Bearer tokens and scopes required for the log and live-log endpoints.
+</Card>
+<Card title="Networking" href="/docs/operations/networking">
+The REST port the log endpoints listen on and how to reach them across nodes.
+</Card>
+<Card title="WebSockets" href="/docs/api-reference/websockets">
+Live-log and other streaming endpoints with their handshake and message formats.
+</Card>
+</CardGrid>

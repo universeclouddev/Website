@@ -1,0 +1,127 @@
+---
+title: Proxy plugins
+order: 3
+lead: 'Velocity and BungeeCord plugins that poll the Master REST API, register online instances as backend servers, and optionally auto-connect joining players by a selection strategy.'
+description: 'Velocity and BungeeCord proxy plugins that poll the Universe REST API, register online instances as backends, and auto-connect players by a configurable selection strategy.'
+---
+
+The proxy plugins replace a static server list with live discovery. Rather than hard-coding backends, Velocity 3.5.0 and BungeeCord poll the Master REST API at a configurable interval, register every `ONLINE` instance as a backend server, and (optionally) auto-connect joining players. As game servers come up and go down, the proxy's server list tracks them within one poll interval.
+
+## What the plugin does on load
+
+1. Load configuration from `plugins/Universe/config.yml`; system properties and environment variables override file settings.
+1. Start an instance poller that calls `GET /api/instances` on a fixed interval to register and deregister backends.
+1. Optionally enable auto-connect listeners that route joining players by a selection strategy.
+1. Register the `/universe` command set for manual inspection and routing.
+
+## Install
+
+Build the variant for your proxy, drop the shaded JAR into the proxy's `plugins/` directory, and restart.
+
+<Tabs tabs={['Velocity', 'BungeeCord']}>
+<Fragment slot="0">
+
+```bash
+./gradlew :minecraft:minecraft-velocity:build
+# Output: .built/minecraft-velocity-<version>-all.jar
+```
+
+Place the JAR in Velocity's `plugins/` directory and restart Velocity.
+
+</Fragment>
+<Fragment slot="1">
+
+```bash
+./gradlew :minecraft:minecraft-bungee:build
+# Output: .built/minecraft-bungee-<version>-all.jar
+```
+
+Place the JAR in BungeeCord's `plugins/` directory and restart BungeeCord.
+
+</Fragment>
+</Tabs>
+
+## Configuration
+
+Both plugins generate the same `plugins/Universe/config.yml` on first run:
+
+```yaml title="plugins/Universe/config.yml"
+master-url: "http://localhost:7000"
+poll-interval-seconds: 10
+# api-key: ""
+
+auto-connect:
+  enabled: false
+  configuration-type: "lobby"
+  strategy: "least_populated"
+```
+
+| Key | Default | Override | Purpose |
+| --- | --- | --- | --- |
+| master-url | `http://localhost:7000` | `universe.master.url`, `UNIVERSE_MASTER_URL` | Base URL of the Master REST API. |
+| poll-interval-seconds | `10` | file only | How often the poller refreshes the backend list. |
+| api-key | (none) | `universe.api.key`, `UNIVERSE_API_KEY` | Optional Bearer token for authenticated Masters. |
+| auto-connect.enabled | `false` | file only | Enable automatic player routing on join. |
+| auto-connect.configuration-type | `lobby` | file only | Restricts routing to instances of this configuration. |
+| auto-connect.strategy | `least_populated` | file only | How a target instance is chosen. |
+
+## Polling and forwarding
+
+On each pass the poller fetches all `ONLINE` instances and reconciles them against the proxy's current backend list. New instances register under `hostAddress:allocatedPort`; instances that are no longer online or have vanished from the response are deregistered. Changes propagate within one poll interval.
+
+<Mermaid title="reconcile loop" chart={`
+flowchart TB
+  poll["every poll-interval<br/>GET /api/instances"] --> check{instance state}
+  check -->|"ONLINE · not registered"| reg["register backend<br/>hostAddress : allocatedPort"]
+  check -->|"registered · no longer ONLINE"| dereg["deregister backend"]
+  style reg stroke:#9ece6a,stroke-width:1.5px
+  style dereg stroke:#f7768e,stroke-width:1.5px
+`} />
+
+<Callout type="note">
+Because the proxy reads `hostAddress` and `allocatedPort` straight from the instances map, it always forwards to the exact address Universe allocated, even when ports are drawn dynamically from a range.
+</Callout>
+
+## Auto-connect strategies
+
+With auto-connect enabled, the plugin intercepts the join event and routes the player to an instance matching `configuration-type`, choosing among eligible instances by strategy:
+
+| Strategy | Behaviour |
+| --- | --- |
+| `least_populated` | Routes to the instance with the fewest players, spreading load evenly. |
+| `most_populated` | Fills the fullest non-full instance first, consolidating players. |
+| `random` | Picks an eligible instance at random. |
+
+<Callout type="tip">
+If no matching instance exists or every candidate is full, the player falls back to the proxy's default server. Keep a default configured so joins never dead-end.
+</Callout>
+
+## The /universe command set
+
+| Command | Permission | Function |
+| --- | --- | --- |
+| `/universe info` | Operator | Display Master URL, connection status, and poll interval. |
+| `/universe send <player> <server>` | Operator | Transfer a player to the named instance. |
+
+The `<server>` argument is the instance ID as registered in the proxy's server list.
+
+```text title="manual routing"
+/universe send <player> <server>
+```
+
+## Related
+
+<CardGrid>
+<Card title="Minecraft overview" href="/docs/minecraft/overview">
+Where proxies sit in the network and how backends register.
+</Card>
+<Card title="Server plugins" href="/docs/minecraft/plugins">
+The server-side plugins that report the ONLINE state proxies poll for.
+</Card>
+<Card title="Plugin API" href="/docs/minecraft/api">
+Build custom routing and network logic against the instance API.
+</Card>
+<Card title="Networking" href="/docs/operations/networking">
+Address resolution, ports, and reaching the Master across hosts.
+</Card>
+</CardGrid>

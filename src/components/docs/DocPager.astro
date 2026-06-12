@@ -1,0 +1,32 @@
+---
+import type { DocLink } from '../../docs/nav';
+
+interface Props {
+	prev?: DocLink;
+	next?: DocLink;
+}
+const { prev, next } = Astro.props;
+---
+
+<nav class="doc-pager">
+	{
+		prev ? (
+			<a class="doc-pager-link is-prev" href={prev.href}>
+				<span class="doc-pager-dir">← prev</span>
+				<span class="doc-pager-title">{prev.title}</span>
+			</a>
+		) : (
+			<span class="flex-1" />
+		)
+	}
+	{
+		next ? (
+			<a class="doc-pager-link is-next" href={next.href}>
+				<span class="doc-pager-dir">next →</span>
+				<span class="doc-pager-title">{next.title}</span>
+			</a>
+		) : (
+			<span class="flex-1" />
+		)
+	}
+</nav>

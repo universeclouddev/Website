@@ -1,0 +1,132 @@
+---
+title: Extensions overview
+order: 1
+lead: 'Extensions are self-contained JARs dropped into ./extensions. On startup Universe scans the directory, finds classes that implement the Extension interface, injects their dependencies, and calls onLoad so each can register a runtime, storage backend, template variable, database, metrics exporter, or integration.'
+description: 'How Universe extensions load: drop a JAR into ./extensions, self-registration through the Extension interface, lifecycle hooks, and the bundled extension catalog.'
+---
+
+Universe keeps its core small and pushes optional behavior into extensions. An extension is an ordinary JAR placed in `./extensions/`. There are no service-loader files to maintain and no registration manifest: you place the JAR, restart the node, and the extension wires itself in. Each extension contributes capability through registries exposed by the `extension-api` module, so the orchestrator never has to know about a backend ahead of time.
+
+## How loading works
+
+`ExtensionService` runs a four-step initialization during startup, before the node begins accepting deploy tasks:
+
+<Steps>
+<Step title="JAR discovery">
+`LoaderUtils.loadDirectory()` adds every `*.jar` in `./extensions/` to the runtime classloader.
+</Step>
+<Step title="Class scanning">
+`ExtensionClassUtils.extensions()` scans the loaded classes for any that implement the `Extension` interface.
+</Step>
+<Step title="Guice injection">
+Each extension is instantiated through its no-argument constructor, then receives its `@Inject` dependencies (registries, services) before any lifecycle method runs.
+</Step>
+<Step title="Lifecycle start">
+`onLoad()` is called on each extension. An extension that returns `true` from `masterOnly()` is skipped silently on Wrapper nodes.
+</Step>
+</Steps>
+
+A typical working directory after copying a few JARs in looks like this:
+
+```text title="./extensions/"
+./extensions/
+  extension-storage-s3.jar
+  extension-db-postgres.jar
+  extension-metrics-prometheus.jar
+  extension-discord.jar
+  s3/config.json            ← per-extension config lives in its own folder
+  discord/config.json
+  metrics-influxdb/config.json
+```
+
+<Callout type="note">
+Per-extension configuration lives in its own folder under `./extensions/`, named after the extension (for example `./extensions/s3/config.json`). The JAR and its config folder sit side by side.
+</Callout>
+
+## The Extension interface
+
+Every extension implements a small contract:
+
+- `id()` and `version()` identify the extension.
+- `masterOnly()` returns `true` to load only on Master nodes (default `false`).
+- `reloadable()` returns `false` to refuse runtime reloads (default `true`).
+- `onLoad()`, `onReload()`, and `onUnload()` are the lifecycle hooks. Providers are registered in `onLoad()` and torn down in `onUnload()`.
+
+## What an extension can add
+
+Extensions register against the registries in `extension-api`. The bundled extensions fall into six categories:
+
+| Category | What it contributes |
+| --- | --- |
+| Storage | Remote template backends (S3, MinIO) via `TemplateStorageProvider`. |
+| Runtimes | Execution environments (Docker, Kubernetes) via `RuntimeProvider`. |
+| Databases | Persistence backends (PostgreSQL, MongoDB, Redis) via `DatabaseProvider`. |
+| Metrics | Observability exporters (Prometheus, InfluxDB) via `MetricsProvider`. |
+| DevOps | GitOps sync and Kubernetes manifest export. |
+| Integrations | Third-party services such as the Discord bot. |
+
+## Installing an extension
+
+Extension JARs are produced by the Gradle build alongside the core, but they are not bundled into the fat JAR. Copy the ones you want from `.built/` into your working directory's `./extensions/` folder, then restart the node:
+
+```bash
+# After ./gradlew build, the extension JARs land in .built/
+# Copy the ones you want into the working directory's ./extensions/
+cp .built/extension-storage-s3-*.jar ./extensions/
+cp .built/extension-discord-*.jar ./extensions/
+```
+
+## Managing extensions at runtime
+
+The console exposes a small command group, also reachable over `POST /api/commands/execute`:
+
+```text title="extension list"
+extension list
+
+  id                    version   status      scope
+  storage-s3            0.0.1     loaded      all
+  db-postgres           0.0.1     loaded      master
+  metrics-prometheus    0.0.1     loaded      master
+  discord               0.0.1     loaded      master
+```
+
+```bash
+# Reload every reloadable extension
+extension reload
+
+# Reload one extension by id
+extension reload gitops
+```
+
+<Callout type="warning">
+`extension reload` only affects extensions whose `reloadable()` returns `true`. A reload closes the extension's clients, re-reads its config, and re-registers its providers without restarting the cluster.
+</Callout>
+
+## Bundled extensions
+
+<CardGrid>
+<Card title="S3 storage" href="/docs/extensions/storage-s3">
+Centralized multi-node template storage on an S3 or MinIO bucket.
+</Card>
+<Card title="Database extensions" href="/docs/extensions/databases">
+PostgreSQL, MongoDB, and Redis persistence backends.
+</Card>
+<Card title="Metrics" href="/docs/extensions/metrics">
+Prometheus scrape endpoint and InfluxDB push export.
+</Card>
+<Card title="Tailscale" href="/docs/extensions/tailscale">
+Inject a node's mesh-network address into template variables.
+</Card>
+<Card title="GitOps" href="/docs/extensions/gitops">
+Sync templates and configurations from a Git repository.
+</Card>
+<Card title="ArgoCD" href="/docs/extensions/argocd">
+Export Universe state as Kubernetes manifests for ArgoCD.
+</Card>
+<Card title="Discord" href="/docs/extensions/discord">
+Manage the cluster from Discord slash commands.
+</Card>
+<Card title="Building extensions" href="/docs/extensions/building-extensions">
+Author your own extension against the registry interfaces.
+</Card>
+</CardGrid>

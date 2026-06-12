@@ -1,0 +1,146 @@
+---
+title: Screen & tmux
+order: 2
+lead: 'screen and tmux are the two built-in process runtimes. Each spawns a detached session per instance named universe-<instanceId>, pipes stdin through stuff or send-keys, and reconciles surviving sessions on startup. No extension JARs required.'
+description: 'Local instance execution with the built-in screen and tmux runtimes: session naming, stdin piping, manual attach, log capture, and node requirements.'
+---
+
+Universe ships two process-based runtimes for local execution, `screen` (GNU Screen) and `tmux`. Both are implemented directly in the `app` module, need no extension, and follow an identical four-step lifecycle: start a detached session, execute by piping to its stdin, stop by terminating the session, and recover by scanning existing sessions on startup to reconcile in-flight instances.
+
+## Session naming and lifecycle
+
+Both providers name every session `universe-<instanceId>`. That deterministic name is what lets the runtime find, signal, and clean up a session without storing extra state, and it is what `recover()` matches against when the node restarts. The two providers differ only in the underlying multiplexer primitives.
+
+<Tabs tabs={['Screen', 'Tmux']}>
+<Fragment slot="0">
+
+`ScreenRuntimeProvider` quits any existing session of the same name, then launches a detached session that changes into the working directory before running the command. Environment variables are injected via `ProcessBuilder.environment()`, and when cgroup v2 is available the session PID is moved into a dedicated cgroup.
+
+```bash title="screen primitives"
+# start  (any stale session of the same name is quit first)
+screen -dmS universe-<id> bash -c "cd <workingDir> && <command>"
+
+# execute a command (stdin)
+screen -S universe-<id> -X stuff "<command>\n"
+
+# capture a log snapshot
+screen -S universe-<id> -X hardcopy <tempfile>
+
+# stop
+screen -S universe-<id> -X quit
+```
+
+</Fragment>
+<Fragment slot="1">
+
+`TmuxRuntimeProvider` follows the same pattern but uses tmux primitives. The working directory is passed natively through the `-c` flag rather than a shell `cd`, and stdin is delivered as simulated key presses through `send-keys`.
+
+```bash title="tmux primitives"
+# start  (stale sessions are killed first; -c sets the working dir natively)
+tmux new-session -d -s universe-<id> -c <workingDir> <command>
+
+# execute a command (stdin)
+tmux send-keys -t universe-<id> "<command>" Enter
+
+# capture scrollback
+tmux capture-pane -p -t universe-<id> -S -<lines>
+
+# stop
+tmux kill-session -t universe-<id>
+```
+
+</Fragment>
+</Tabs>
+
+## Configuration
+
+Set `runtime` to `screen` or `tmux` in your instance configuration. No runtime-specific fields are required, every standard configuration field is respected as-is.
+
+```json title="configuration/default.json"
+{
+	"name": "default",
+	"runtime": "screen",
+	"command": "java -jar server.jar",
+	"availablePorts": { "min": 25565, "max": 25570 },
+	"minimumServiceCount": 1
+}
+```
+
+## Node requirements
+
+Install the multiplexer on each Wrapper that will host these runtimes:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install screen tmux
+
+# RHEL / CentOS / Fedora
+sudo dnf install screen tmux
+
+# Alpine
+apk add screen tmux
+```
+
+Then confirm both binaries are on the path:
+
+```bash
+screen --version
+tmux -V
+```
+
+<Callout type="note">
+The session runtimes target Linux and macOS. If you need a runtime that works without a terminal multiplexer, use `process` for a bare child process, or move to the Docker or Kubernetes runtimes.
+</Callout>
+
+## Working directory and variables
+
+Instances run from `./running/<instanceId>/`. Universe copies the resolved template tree into that directory and replaces every `%VARIABLE%` placeholder (such as `%PORT%` and `%INSTANCE_ID%`) in the files listed under `fileModifications` before the process launches. Screen reaches the directory with a shell `cd`; tmux uses its `-c` flag.
+
+## Executing commands
+
+Both runtimes implement command execution by writing to the session's stdin. The cleanest path is the REST API, which routes to `stuff` on screen or `send-keys` on tmux:
+
+```bash
+curl -X POST http://localhost:7000/api/instances/<id>/execute \
+	-H "Content-Type: application/json" \
+	-d '{"command": "say Hello from Universe"}'
+```
+
+The command appears exactly as if it had been typed at the terminal.
+
+## Attaching manually
+
+For hands-on debugging you can attach to a live session directly, no API call needed:
+
+```bash
+# Screen  (detach with Ctrl-A then D)
+screen -r universe-<instanceId>
+
+# Tmux  (detach with Ctrl-B then D)
+tmux attach -t universe-<instanceId>
+```
+
+## Log capture
+
+Screen dumps its buffer with `hardcopy` to a temporary file; tmux reads scrollback with `capture-pane`. Either way, `getLogs()` returns a point-in-time snapshot.
+
+<Callout type="warning">
+Neither the screen nor the tmux runtime supports streaming logs to the REST API over WebSocket. `getLogs()` captures a snapshot only, never a continuous stream. If you need live log tailing through the API, use the Docker or Kubernetes runtime, both stream from the container's stdout and stderr.
+</Callout>
+
+## Related
+
+<CardGrid>
+<Card title="Runtimes overview" href="/docs/runtimes/overview">
+The `RuntimeProvider` contract and how the Wrapper picks a backend.
+</Card>
+<Card title="Docker runtime" href="/docs/runtimes/docker">
+Per-instance containers with real-time log streaming over REST and WebSocket.
+</Card>
+<Card title="Kubernetes runtime" href="/docs/runtimes/kubernetes">
+Pod-based execution for distributed, auto-scaling deployments.
+</Card>
+<Card title="Quickstart" href="/docs/quickstart">
+Build the JAR and deploy your first instance end to end.
+</Card>
+</CardGrid>

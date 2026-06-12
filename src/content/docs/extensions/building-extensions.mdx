@@ -1,0 +1,236 @@
+---
+title: Building extensions
+order: 9
+lead: 'Author your own extension against the registry interfaces in extension-api. Implement the Extension interface, register a provider in onLoad, build a JAR that depends only on :api and :extensions:extension-api, and drop it into ./extensions.'
+description: 'Write a Universe extension: the Extension interface, the provider registries for storage, variables, databases, metrics and runtimes, the Gradle setup, and packaging the JAR.'
+---
+
+An extension is a JAR in `./extensions/` that implements the `Extension` interface. At startup `ExtensionService` loads every JAR in that directory, scans for `Extension` implementations, instantiates each via its no-argument constructor, injects dependencies with Guice, and stores it in the registry. Your job is to implement the interface and register a provider against one of the registries in `extension-api`.
+
+## The Extension interface
+
+Every extension implements five core methods plus two optional overrides:
+
+| Method | Role |
+| --- | --- |
+| `id(): String` | Unique identifier. |
+| `version(): String` | Semantic version string. |
+| `onLoad()` | Called after dependency injection completes. Register providers here. |
+| `onUnload()` | Cleanup during shutdown or removal. Unregister providers here. |
+| `onReload()` | Optional re-initialization logic. |
+| `masterOnly(): Boolean` | Default `false`. Return `true` to skip Wrapper nodes. |
+| `reloadable(): Boolean` | Default `true`. Return `false` to refuse runtime reloads. |
+
+## Walkthrough
+
+<Steps>
+<Step title="Implement the Extension interface">
+Start with the minimal lifecycle. The `log` helper writes to the Universe console:
+
+```kotlin title="ExampleExtension.kt"
+package gg.scala.universe.example
+
+import gg.scala.universe.console.LogLevel
+import gg.scala.universe.extension.Extension
+import gg.scala.universe.console.log
+
+class ExampleExtension : Extension {
+	override fun id(): String = "example-extension"
+	override fun version(): String = "0.0.1"
+
+	override fun onLoad() {
+		log("ExampleExtension loaded!", LogLevel.SUCCESS)
+	}
+
+	override fun onUnload() {
+		log("ExampleExtension unloaded!", LogLevel.SUCCESS)
+	}
+
+	override fun onReload() {
+		log("ExampleExtension reloaded!", LogLevel.SUCCESS)
+	}
+}
+```
+
+</Step>
+<Step title="Inject the registries you need">
+Annotate fields with `@Inject` to receive Guice-managed dependencies before `onLoad()` runs. Register your provider in `onLoad()` and remove it in `onUnload()`:
+
+```kotlin title="MyExtension.kt"
+import com.google.inject.Inject
+import gg.scala.universe.extension.Extension
+import gg.scala.universe.template.TemplateVariableRegistry
+
+class MyExtension : Extension {
+	@Inject
+	private lateinit var variableRegistry: TemplateVariableRegistry
+
+	override fun id(): String = "my-extension"
+	override fun version(): String = "0.0.1"
+
+	override fun onLoad() {
+		variableRegistry.register(MyVariableProvider())
+	}
+
+	override fun onUnload() {
+		variableRegistry.unregister(MyVariableProvider::class)
+	}
+}
+```
+
+<Callout type="warning">
+Register providers in `onLoad()`, never in static initializers. Injected dependencies are not available until injection completes.
+</Callout>
+</Step>
+<Step title="Configure the Gradle module">
+Create a module under `extensions/` and add it to `settings.gradle.kts` via the `registerSubProjects` call. The build depends only on the shared modules:
+
+```kotlin title="extensions/my-extension/build.gradle.kts"
+plugins {
+	id("kotlin-jvm")
+}
+
+dependencies {
+	compileOnly(project(":api"))
+	compileOnly(project(":extensions:extension-api"))
+	runtimeDownload(libs.my.library)
+}
+```
+
+</Step>
+<Step title="Build and deploy">
+Compile the module to a JAR, copy it into `./extensions/`, and restart the application (or call the reload command). `ExtensionService` discovers and loads it on startup.
+
+```bash
+cp .built/extension-my-extension-*.jar ./extensions/
+```
+
+</Step>
+</Steps>
+
+## Extension point interfaces
+
+Each capability has a registry exposed through `extension-api`. Implement the matching interface and register your implementation in `onLoad()`.
+
+<Accordion title="TemplateStorageProvider: custom template backends">
+For FTP, GCS, Azure, or any other store. Register via `TemplateStorageRegistry`:
+
+```kotlin title="TemplateStorageProvider"
+interface TemplateStorageProvider {
+	val storageKey: String
+	fun downloadTemplate(group: String, name: String): Boolean
+	fun uploadTemplate(group: String, name: String): Boolean
+	fun listTemplates(group: String): List<String>
+	fun extractTemplate(
+		group: String,
+		name: String,
+		targetDir: java.nio.file.Path,
+		overwrite: Boolean
+	): Boolean
+	fun syncTemplate(group: String, name: String): Boolean
+}
+```
+
+</Accordion>
+
+<Accordion title="TemplateVariableProvider: inject placeholder values">
+Contribute `%VARIABLE%` replacements at deploy time. Register via `TemplateVariableRegistry`:
+
+```kotlin title="TemplateVariableProvider"
+interface TemplateVariableProvider {
+	fun provideVariables(
+		configuration: Configuration,
+		instanceId: String,
+		allocatedPort: Int
+	): Map<String, String>
+}
+```
+
+</Accordion>
+
+<Accordion title="DatabaseProvider: custom persistence">
+Back Universe state with another database. Register via `DatabaseRegistry`:
+
+```kotlin title="DatabaseProvider"
+interface DatabaseProvider {
+	val providerKey: String
+	fun connect()
+	fun disconnect()
+	fun isConnected(): Boolean
+	fun getApiKeyByToken(token: String): ApiKey?
+	fun getApiKeyById(keyId: String): ApiKey?
+	fun saveApiKey(apiKey: ApiKey)
+	fun deleteApiKey(keyId: String)
+	fun listApiKeys(): List<ApiKey>
+}
+```
+
+</Accordion>
+
+<Accordion title="MetricsProvider: custom exporters">
+Export to another observability backend. Register via `MetricsRegistry`:
+
+```kotlin title="MetricsProvider"
+interface MetricsProvider {
+	val providerKey: String
+	fun start()
+	fun stop()
+	fun scrape(): String
+	fun gauge(name: String, value: Double, tags: Map<String, String> = emptyMap())
+	fun counter(name: String, amount: Double = 1.0, tags: Map<String, String> = emptyMap())
+	fun timer(name: String, durationMs: Long, tags: Map<String, String> = emptyMap())
+}
+```
+
+</Accordion>
+
+<Accordion title="RuntimeProvider: custom execution environments">
+Run instances on Docker, Kubernetes, or another platform. Register via `RuntimeRegistry`:
+
+```kotlin title="RuntimeProvider"
+interface RuntimeProvider {
+	fun start(
+		instanceId: String,
+		workingDir: java.nio.file.Path,
+		port: Int,
+		command: String,
+		ramMB: Int,
+		cpu: Int,
+		configuration: Configuration,
+		environmentVariables: Map<String, String>? = null
+	): ProcessHandle
+
+	fun stop(instanceId: String)
+	fun executeCommand(instanceId: String, command: String)
+	fun isRunning(instanceId: String): Boolean
+	fun listRunningInstances(): List<String> = emptyList()
+	fun getHostAddress(instanceId: String): String = ""
+	fun getLogs(instanceId: String, lines: Int = 100): List<String> = emptyList()
+}
+```
+
+</Accordion>
+
+## Rules to follow
+
+- Depend only on `:api` and `:extensions:extension-api`. Never reference `:app`.
+- Use `runtimeDownload` for external libraries, not `implementation`.
+- Register providers in `onLoad()` and unregister them in `onUnload()`.
+- An extension with `masterOnly() = true` is skipped silently on Wrapper nodes.
+- An extension with `reloadable() = false` refuses runtime reloads.
+
+<Callout type="tip">
+Keeping dependencies on the shared modules only is what makes an extension portable across Universe versions. The core never compiles against your code, and your code never compiles against the core.
+</Callout>
+
+<CardGrid>
+<Card title="Extensions overview" href="/docs/extensions/overview">
+The loading sequence and the bundled extension catalog.
+</Card>
+<Card title="Architecture" href="/docs/architecture">
+Where the registries fit in the Master and Wrapper topology.
+</Card>
+<Card title="Runtimes" href="/docs/runtimes/overview">
+See RuntimeProvider in use across the built-in runtimes.
+</Card>
+</CardGrid>

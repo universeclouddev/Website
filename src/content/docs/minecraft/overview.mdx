@@ -1,0 +1,98 @@
+---
+title: Minecraft overview
+order: 1
+lead: 'How a Minecraft network runs on Universe: lobbies and game servers come online as instances, proxies poll the REST API to auto-wire backends, and the plugin family heartbeats state back to the cluster.'
+description: 'How Universe runs a Minecraft network: game servers register as instances, proxies auto-wire backends from the REST API, and the plugin family heartbeats state to the cluster.'
+---
+
+Universe treats every Minecraft server as an ordinary instance. A lobby, a bedwars arena, and a skywars round are all just processes Universe deployed from a template and is tracking in the cluster state map. The Minecraft integration adds a thin plugin family on top of that: server-side plugins announce each backend as it comes online, and proxy-side plugins watch the REST API and connect those backends automatically. There is no static server list to maintain, the network composes itself as instances appear and disappear.
+
+<Callout type="note">
+Universe provides first-class support for Paper, Spigot, Folia, Velocity, and BungeeCord. The plugins auto-register instances, heartbeat their state, and expose a clean plugin API for network logic.
+</Callout>
+
+## The two plugin layers
+
+The integration splits along the same boundary as a Minecraft network itself. **Server plugins** run inside each game server and report that server's state upward. **Proxy plugins** run at the network edge, poll the Master REST API, and wire backends into the proxy's server list. Both layers build on the `:minecraft:api` module, a JVM-8 compatible library that speaks to the cluster.
+
+| Module | Platform | Version | Chat format |
+| --- | --- | --- | --- |
+| minecraft-modern | Paper | 1.21.11+ | MiniMessage |
+| minecraft-legacy | Spigot | 1.8.8 | Legacy color codes |
+| minecraft-folia | Folia | 1.21+ | MiniMessage |
+| minecraft-velocity | Velocity | 3.5.0 | MiniMessage |
+| minecraft-bungee | BungeeCord | Latest | Legacy color codes |
+
+## Network topology
+
+A typical network puts a Velocity or BungeeCord proxy in front of a pool of game servers. The proxy holds no fixed configuration for the backends, it discovers them. Each game server reports `ONLINE` to the Master, and the proxy's poller picks them up on its next pass.
+
+<Mermaid title="network topology" chart={`
+flowchart TB
+  players["Players"] ==>|join| proxy["Proxy · Velocity / BungeeCord<br/>polls /api/instances · routes backends"]
+  proxy --> lobby["lobby · Paper"]
+  proxy --> bedwars["bedwars · Paper"]
+  proxy --> skywars["skywars · Folia"]
+  lobby -->|ONLINE| master
+  bedwars -->|ONLINE| master
+  skywars -->|ONLINE| master
+  master["Universe Master :7000<br/>instances IMap"]
+  style proxy stroke:#bb9af7,stroke-width:1.5px
+  style master stroke:#7aa2f7,stroke-width:1.5px
+`} />
+
+## Auto-registration flow
+
+When Universe deploys a Minecraft instance, the standard deploy path copies the template and replaces the built-in variables. A `server.properties` written with `%PORT%` and `%HOST_ADDRESS%` binds the server to its allocated port, so the plugin and the proxy see a consistent address. From there the lifecycle is:
+
+1. Universe deploys the instance and writes `state: CREATING` into the instances map.
+1. The server boots; the server plugin resolves the Master URL and its instance ID.
+1. The plugin reports `ONLINE` via `PUT /api/instances/{id}/state` and starts its heartbeat.
+1. The proxy poller calls `GET /api/instances`, sees the new `ONLINE` backend, and registers `hostAddress:allocatedPort` as a server.
+1. With auto-connect enabled, joining players route to a matching instance by the configured strategy.
+1. When the instance stops or its Wrapper leaves the cluster, its state changes and the proxy deregisters it on the next poll.
+
+<Callout type="tip">
+Because both the plugin and the proxy read the same `hostAddress` and `allocatedPort` from the instances map, the wiring is consistent even when ports are allocated dynamically from a range.
+</Callout>
+
+## Pointing the plugins at the Master
+
+Every plugin resolves the Master URL through the same four-step hierarchy. The first source that yields a value wins:
+
+1. JVM system property `-Duniverse.master.url`
+1. Environment variable `UNIVERSE_MASTER_URL`
+1. The `master-url` key in `plugins/Universe/config.yml`
+1. Default fallback of `http://localhost:7000`
+
+```bash title="system property or env var"
+-Duniverse.master.url=http://my-master:7000
+UNIVERSE_MASTER_URL=http://my-master:7000
+```
+
+The same resolution pattern applies to instance IDs and API keys, which lets you inject identity through the runtime environment rather than baking it into a config file.
+
+<Callout type="warning">
+When a Minecraft server runs inside a container or pod, the loopback address `localhost` cannot reach a Master that lives on the host or in another container. Point `master-url` at a container-reachable address such as `host.docker.internal` (Docker) or a Kubernetes service DNS name.
+</Callout>
+
+```yaml title="plugins/Universe/config.yml"
+master-url: "http://host.docker.internal:7000"
+```
+
+## Where to go next
+
+<CardGrid>
+<Card title="Server plugins" href="/docs/minecraft/plugins">
+Install the Paper, Spigot, and Folia plugins and see what each reports to the Master.
+</Card>
+<Card title="Proxy plugins" href="/docs/minecraft/proxy-plugins">
+Configure Velocity and BungeeCord to auto-connect backends as they come online.
+</Card>
+<Card title="Plugin API" href="/docs/minecraft/api">
+Query instances, start servers, and drive network logic from your own plugin.
+</Card>
+<Card title="Quickstart" href="/docs/quickstart">
+Build the JAR, write a configuration, and deploy your first instance.
+</Card>
+</CardGrid>
