@@ -1,33 +1,25 @@
-/* Universe — "the editor session". Tokyo Night IDE landing.
-   Brand tokens from the Universe Design System readme. */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Ubuntu:wght@400;500;700&display=swap');
 @import 'tailwindcss';
 
-/* ---------- Theme tokens → Tailwind utilities + CSS vars (--color-*, --font-*, --radius-*) ---------- */
 @theme {
-	/* surfaces — background ramp (Tokyo Night) */
-	--color-space-0: #1a1b26; /* page */
-	--color-space-1: #1f2335; /* panes */
-	--color-space-2: #24283b; /* strips / cards */
-	--color-space-3: #292e42; /* cursorline / hover */
-	--color-space-4: #3b4261; /* selection */
-	--color-surface-inset: #16161e; /* terminal wells */
-	--color-surface-inset-2: #1a1b26; /* terminal/pane chrome strips */
+	--color-space-0: #1a1b26;
+	--color-space-1: #1f2335;
+	--color-space-2: #24283b;
+	--color-space-3: #292e42;
+	--color-space-4: #3b4261;
+	--color-surface-inset: #16161e;
+	--color-surface-inset-2: #1a1b26;
 
-	/* text */
 	--color-fg-1: #c0caf5;
 	--color-fg-2: #a9b1d6;
-	--color-fg-3: #565f89; /* gutters / muted */
+	--color-fg-3: #565f89;
 
-	/* lines */
-	--color-line-1: #2a2e44; /* subtle hairline */
-	--color-line-2: #3b4261; /* stronger rule */
+	--color-line-1: #2a2e44;
+	--color-line-2: #3b4261;
 
-	/* accent — tokyo night blue */
 	--color-accent: #7aa2f7;
 	--color-accent-ink: #1a1b26;
 
-	/* syntax set (semantic color voice) */
 	--color-syn-red: #f7768e;
 	--color-syn-green: #9ece6a;
 	--color-syn-yellow: #e0af68;
@@ -37,7 +29,6 @@
 	--color-syn-orange: #ff9e64;
 	--color-syn-comment: #565f89;
 
-	/* terminal / tty */
 	--color-tty-out: #a9b1d6;
 	--color-tty-dim: #565f89;
 	--color-tty-bright: #c0caf5;
@@ -46,38 +37,31 @@
 	--color-tty-err: #f7768e;
 	--color-tty-prompt: #7dcfff;
 
-	/* radii — editor-chrome rounding */
 	--radius-1: 2px;
 	--radius-2: 4px;
 	--radius-3: 6px;
 	--radius-round: 999px;
 
-	/* type */
 	--font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 	--font-body: 'Ubuntu', system-ui, sans-serif;
 }
 
-/* ---------- non-utility tokens ---------- */
 :root {
 	color-scheme: dark;
 
 	--line-accent: rgba(122, 162, 247, 0.4);
 
-	/* motion — editor-snappy */
 	--dur-fast: 130ms;
 	--dur-base: 180ms;
 	--ease-out: cubic-bezier(0.25, 0, 0.2, 1);
 
-	/* layout */
 	--container-wide: 1380px;
 	--text-xl: clamp(26px, 3vw, 36px);
 
-	/* depth */
 	--glow-online: 0 0 6px rgba(158, 206, 106, 0.55);
 	--shadow-panel: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
 }
 
-/* ---------- base ---------- */
 * {
 	box-sizing: border-box;
 }
@@ -88,7 +72,7 @@ html {
 
 body {
 	margin: 0;
-	padding-bottom: 29px; /* fixed vim status bar */
+	padding-bottom: 29px;
 	background: var(--color-space-0);
 	color: var(--color-fg-1);
 	font-family: var(--font-body);
@@ -103,12 +87,14 @@ body {
 	color: var(--color-fg-1);
 }
 
-a {
-	color: var(--color-accent);
-	text-decoration: none;
-}
-a:hover {
-	text-decoration: underline;
+@layer base {
+	a {
+		color: var(--color-accent);
+		text-decoration: none;
+	}
+	a:hover {
+		text-decoration: underline;
+	}
 }
 
 code,
@@ -118,7 +104,6 @@ samp {
 	font-family: var(--font-mono);
 }
 
-/* IDE scrollbars */
 * {
 	scrollbar-width: thin;
 	scrollbar-color: var(--color-space-4) transparent;
@@ -139,7 +124,6 @@ samp {
 	background: #414868;
 }
 
-/* ---------- syntax color helpers ---------- */
 .syn-red {
 	color: var(--color-syn-red);
 }
@@ -166,7 +150,6 @@ samp {
 	font-style: italic;
 }
 
-/* ---------- comment-style eyebrow label ---------- */
 .u-label {
 	font-family: var(--font-mono);
 	font-size: 11px;
@@ -179,7 +162,6 @@ samp {
 	color: var(--color-syn-green);
 }
 
-/* ---------- pane (a "file" surface) ---------- */
 .u-pane {
 	background: var(--color-space-1);
 	border: 1px solid var(--color-line-1);
@@ -198,7 +180,6 @@ samp {
 	color: var(--color-fg-3);
 }
 
-/* ---------- cursorline hover ---------- */
 .u-cursorline {
 	transition: background var(--dur-fast) var(--ease-out);
 }
@@ -206,7 +187,6 @@ samp {
 	background: var(--color-space-3);
 }
 
-/* ---------- blinking block cursor ---------- */
 .u-cursor {
 	display: inline-block;
 	width: 0.55em;
@@ -221,7 +201,6 @@ samp {
 	}
 }
 
-/* ---------- editor indent guide backdrop ---------- */
 .u-indent-bg {
 	position: relative;
 }
@@ -240,7 +219,6 @@ samp {
 	);
 }
 
-/* ---------- editor tab (tab strip) ---------- */
 .u-tab {
 	position: relative;
 	color: var(--color-fg-3);
@@ -268,7 +246,6 @@ samp {
 	background: var(--color-accent);
 }
 
-/* ---------- file-tree row ---------- */
 .u-ftrow {
 	position: relative;
 	transition:
@@ -294,7 +271,6 @@ samp {
 	background: var(--color-accent);
 }
 
-/* ---------- sub-tab (preview panes) ---------- */
 .u-subtab {
 	color: var(--color-fg-3);
 	border-bottom: 2px solid transparent;
@@ -308,7 +284,6 @@ samp {
 	border-bottom-color: var(--color-accent);
 }
 
-/* ---------- scroll reveal ---------- */
 .u-reveal {
 	opacity: 0;
 	transform: translateY(10px);
@@ -339,7 +314,6 @@ samp {
 	}
 }
 
-/* ---------- responsive ---------- */
 @media (max-width: 900px) {
 	.filetree {
 		display: none !important;

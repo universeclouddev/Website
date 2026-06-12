@@ -1,7 +1,7 @@
 ---
 import FilePane from '../FilePane.astro';
 import Terminal from '../Terminal.astro';
-import { BOOT_LINES } from '../../data';
+import { BOOT_LINES, SOURCE_URL } from '../../data';
 ---
 
 <FilePane id="readme" label="README.md" dot="var(--color-syn-blue)" meta="markdown" lines={42}>
@@ -35,13 +35,15 @@ import { BOOT_LINES } from '../../data';
 
 				<div class="mt-7 flex flex-wrap items-center gap-3">
 					<a
-						href="#preview"
+						href="#get-started"
 						class="inline-flex items-center gap-2 px-4 h-10 rounded-[var(--radius-2)] bg-accent text-accent-ink font-mono text-[13px] font-semibold hover:no-underline hover:brightness-110 transition"
 					>
-						<span class="text-accent-ink/70">❯</span> read the docs
+						<span class="text-accent-ink/70">❯</span> get started
 					</a>
 					<a
-						href="#templates"
+						href={SOURCE_URL}
+						target="_blank"
+						rel="noreferrer"
 						class="inline-flex items-center gap-2 px-4 h-10 rounded-[var(--radius-2)] border border-line-2 text-fg-1 font-mono text-[13px] hover:bg-space-2 hover:no-underline transition"
 					>
 						git clone universe
@@ -49,8 +51,6 @@ import { BOOT_LINES } from '../../data';
 				</div>
 			</div>
 
-			<!-- divider -->
-			<!-- right: boot log -->
 			<div class="relative">
 				<div class="split-divider hidden lg:block absolute -left-4 top-0 bottom-0 w-px bg-line-1"></div>
 				<div class="rounded-[var(--radius-3)] border border-line-1 overflow-hidden shadow-[var(--shadow-panel)]">
@@ -62,7 +62,7 @@ import { BOOT_LINES } from '../../data';
 							<i class="w-2.5 h-2.5 rounded-full" style="background:#e0af68"></i>
 							<i class="w-2.5 h-2.5 rounded-full" style="background:#9ece6a"></i>
 						</span>
-						<span class="ml-1">loader.log — node-1</span>
+						<span class="ml-1">loader.log — na-game-1</span>
 					</div>
 					<Terminal lines={BOOT_LINES} typewriter cursor />
 				</div>

@@ -1,5 +1,6 @@
 ---
 import UniverseMark from './UniverseMark.astro';
+import { SOURCE_URL } from '../data';
 ---
 
 <header
@@ -17,7 +18,7 @@ import UniverseMark from './UniverseMark.astro';
 	</span>
 
 	<span class="hidden sm:block mx-auto font-mono text-[11px] text-fg-3">
-		node-1 · universe-cluster · :7000
+		na-game-1 · universe-cluster · :7000
 	</span>
 
 	<span class="ml-auto sm:ml-0 flex items-center gap-3.5 font-mono text-[11px]">
@@ -25,9 +26,9 @@ import UniverseMark from './UniverseMark.astro';
 		<a class="text-fg-3 hover:text-fg-1 hover:no-underline" href="#editions">docs</a>
 		<a
 			class="text-fg-3 hover:text-fg-1 hover:no-underline"
-			href="https://github.com"
+			href={SOURCE_URL}
 			target="_blank"
-			rel="noreferrer">github</a
+			rel="noreferrer">source</a
 		>
 	</span>
 </header>

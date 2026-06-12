@@ -1,34 +1,37 @@
 ---
 import FilePane from '../FilePane.astro';
-import { STATS, INTEGRATIONS } from '../../data';
+import { STACK } from '../../data';
+
+type Line =
+	| { t: 'head'; text: string }
+	| { t: 'blank' }
+	| { t: 'row'; key: string; value: string; note?: string };
+
+const lines: Line[] = [];
+STACK.forEach((group, gi) => {
+	if (gi > 0) lines.push({ t: 'blank' });
+	lines.push({ t: 'head', text: `# ${group.heading}` });
+	lines.push({ t: 'blank' });
+	group.rows.forEach((r) => lines.push({ t: 'row', key: r.key, value: r.value, note: r.note }));
+});
+
+const rows = lines.filter((l): l is Extract<Line, { t: 'row' }> => l.t === 'row');
+const keyW = Math.max(...rows.map((r) => r.key.length)) + 3;
+const valW = Math.max(...rows.filter((r) => r.note).map((r) => r.value.length)) + 2;
+const pad = (s: string, w: number) => ' '.repeat(Math.max(1, w - s.length));
 ---
 
-<FilePane id="stack" label="stack.txt" dot="var(--color-syn-red)" meta="text" lines={STATS.length + INTEGRATIONS.length}>
-	<div class="p-5 sm:p-6">
-		<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-			{
-				STATS.map((s) => (
-					<div class="rounded-[var(--radius-3)] border border-line-1 bg-surface-inset px-4 py-5 text-center">
-						<div class="font-mono font-extrabold tracking-tight leading-none text-accent text-[clamp(28px,3.4vw,38px)]">
-							{s.value}
-						</div>
-						<div class="mt-2 font-mono text-[11px] text-fg-3">{s.label}</div>
-					</div>
-				))
-			}
-		</div>
-
-		<div class="mt-6 pt-5 border-t border-line-1">
-			<div class="font-mono text-[12px] text-syn-comment italic mb-3"># runs with</div>
-			<div class="flex flex-wrap gap-2 font-mono text-[11.5px]">
-				{
-					INTEGRATIONS.map((name) => (
-						<span class="px-2.5 py-1 rounded-[var(--radius-2)] bg-space-2 border border-line-1 text-fg-2">
-							{name}
-						</span>
-					))
-				}
-			</div>
-		</div>
+<FilePane id="stack" label="stack.txt" dot="var(--color-syn-red)" meta="manifest" lines={lines.length}>
+	<div class="bg-surface-inset overflow-x-auto">
+		<pre class="font-mono text-[12.5px] leading-[1.75] text-fg-2 p-5 sm:p-7 min-w-max">{
+			lines.map((ln, i) => {
+				const nl = i > 0 ? '\n' : '';
+				if (ln.t === 'blank') return nl;
+				if (ln.t === 'head') return (<>{nl}<span class="syn-comment">{ln.text}</span></>);
+				return (
+					<>{nl}{'  '}<span class="syn-aqua">{ln.key}</span>{pad(ln.key, keyW)}<span class="text-fg-1">{ln.value}</span>{ln.note ? (<>{pad(ln.value, valW)}<span class="syn-comment"># {ln.note}</span></>) : null}</>
+				);
+			})
+		}</pre>
 	</div>
 </FilePane>

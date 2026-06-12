@@ -17,7 +17,7 @@ import { CONSOLE_LINES } from '../../data';
 	</div>
 
 	<div data-panel="console">
-		<Terminal lines={CONSOLE_LINES} cursor />
+		<Terminal lines={CONSOLE_LINES} cursor prompt="universe@na-game-1 ›" />
 	</div>
 
 	<div data-panel="curl" hidden>
@@ -30,7 +30,7 @@ KEY=<span class="syn-green">ak_live_…</span>    <span class="syn-comment"># be
 <span class="syn-aqua">curl</span> <span class="syn-yellow">:7000</span>/api/cluster/status \
   <span class="text-fg-3">-H</span> <span class="syn-green">"Authorization: Bearer $KEY"</span>
 
-<span class="syn-aqua">curl</span> <span class="text-fg-3">-X</span> POST <span class="syn-yellow">:7000</span>/api/instance/<span class="syn-purple">a1b2c3</span>/execute \
+<span class="syn-aqua">curl</span> <span class="text-fg-3">-X</span> POST <span class="syn-yellow">:7000</span>/api/instance/<span class="syn-purple">27c625</span>/execute \
   <span class="text-fg-3">-H</span> <span class="syn-green">"Authorization: Bearer $KEY"</span> \
   <span class="text-fg-3">-d</span> <span class="syn-green">"say Universe online"</span></code></pre>
 		</div>

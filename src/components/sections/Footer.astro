@@ -1,5 +1,6 @@
 ---
 import UniverseMark from '../UniverseMark.astro';
+import { SOURCE_URL } from '../../data';
 ---
 
 <footer class="mt-2 border-t border-line-1 pt-8 pb-4 font-mono text-[12px] text-fg-3">
@@ -11,7 +12,7 @@ import UniverseMark from '../UniverseMark.astro';
 		</div>
 		<nav class="flex flex-wrap gap-x-6 gap-y-2">
 			<a class="hover:text-fg-1 hover:no-underline" href="#readme">docs</a>
-			<a class="hover:text-fg-1 hover:no-underline" href="https://github.com" target="_blank" rel="noreferrer">github</a>
+			<a class="hover:text-fg-1 hover:no-underline" href={SOURCE_URL} target="_blank" rel="noreferrer">source</a>
 			<a class="hover:text-fg-1 hover:no-underline" href="#preview">api reference</a>
 			<a class="hover:text-fg-1 hover:no-underline" href="#features">extensions</a>
 			<a class="hover:text-fg-1 hover:no-underline" href="#editions">license</a>

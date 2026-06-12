@@ -5,7 +5,6 @@ const reduced =
 	window.matchMedia &&
 	window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/* ---------- scroll-reveal ---------- */
 function initReveal() {
 	const nodes = Array.from(document.querySelectorAll<HTMLElement>('.u-reveal'));
 	if (reduced || typeof IntersectionObserver === 'undefined') {
@@ -26,7 +25,6 @@ function initReveal() {
 	nodes.forEach((n) => io.observe(n));
 }
 
-/* ---------- terminal typewriter (line-by-line reveal) ---------- */
 function initTypewriter() {
 	const terms = Array.from(document.querySelectorAll<HTMLElement>('[data-term]'));
 	const reveal = (term: HTMLElement) => {
@@ -58,7 +56,6 @@ function initTypewriter() {
 	terms.forEach((t) => io.observe(t));
 }
 
-/* ---------- scrollspy + status bar ---------- */
 function initScrollspy() {
 	const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
 	const tabTargets = Array.from(document.querySelectorAll<HTMLElement>('[data-tab]'));
@@ -80,14 +77,12 @@ function initScrollspy() {
 	};
 
 	const update = () => {
-		// active section = last one whose top is above the fold line
 		let active = sections[0];
 		for (const s of sections) {
 			if (s.getBoundingClientRect().top <= 140) active = s;
 		}
 		if (active) setActive(active.id);
 
-		// status bar line:col + percentage from scroll position
 		const doc = document.documentElement;
 		const max = doc.scrollHeight - doc.clientHeight;
 		const pct = max > 0 ? window.scrollY / max : 0;
@@ -110,7 +105,6 @@ function initScrollspy() {
 	update();
 }
 
-/* ---------- vim keybindings ---------- */
 function initVimKeys() {
 	const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-section]'));
 	let lastG = 0;
@@ -148,7 +142,6 @@ function initVimKeys() {
 	});
 }
 
-/* ---------- foldable feature rows ---------- */
 function initFolds() {
 	document.querySelectorAll<HTMLElement>('[data-fold]').forEach((btn) => {
 		btn.addEventListener('click', () => {
@@ -157,7 +150,6 @@ function initFolds() {
 	});
 }
 
-/* ---------- preview sub-tabs ---------- */
 function initPreviewTabs() {
 	const root = document.querySelector<HTMLElement>('[data-preview]');
 	if (!root) return;
@@ -175,7 +167,6 @@ function initPreviewTabs() {
 	});
 }
 
-/* ---------- template playground ---------- */
 function initTemplate() {
 	const out = document.getElementById('tpl-out');
 	if (!out) return;
@@ -226,7 +217,6 @@ function initTemplate() {
 	render();
 }
 
-/* ---------- copy buttons ---------- */
 function initCopy() {
 	document.querySelectorAll<HTMLElement>('[data-copy]').forEach((btn) => {
 		btn.addEventListener('click', async () => {
@@ -237,7 +227,6 @@ function initCopy() {
 				btn.textContent = 'copied ✓';
 				window.setTimeout(() => (btn.textContent = prev), 1400);
 			} catch {
-				/* clipboard unavailable */
 			}
 		});
 	});

@@ -1,7 +1,10 @@
+export const SOURCE_URL = 'https://git.lunarlabs.dev/scala/universe';
+
 export type FileTab = { id: string; label: string; dot: string };
 
 export const FILES: FileTab[] = [
 	{ id: 'readme', label: 'README.md', dot: 'var(--color-syn-blue)' },
+	{ id: 'stack', label: 'stack.txt', dot: 'var(--color-syn-red)' },
 	{ id: 'features', label: 'features.yaml', dot: 'var(--color-syn-green)' },
 	{ id: 'templates', label: 'templates/', dot: 'var(--color-syn-purple)' },
 	{ id: 'cluster', label: 'cluster.txt', dot: 'var(--color-syn-aqua)' },
@@ -9,26 +12,36 @@ export const FILES: FileTab[] = [
 	{ id: 'editions', label: 'editions.toml', dot: 'var(--color-syn-orange)' }
 ];
 
-export type TermLine = { prompt?: boolean; text: string; tone?: 'out' | 'ok' | 'warn' | 'error' | 'dim' };
+export type TermLine = {
+	prompt?: boolean;
+	text: string;
+	tone?: 'out' | 'ok' | 'warn' | 'error' | 'dim';
+	glyph?: 'arrow' | 'ok' | 'warn';
+};
 
 export const BOOT_LINES: TermLine[] = [
-	{ prompt: true, text: 'java -jar universe-loader.jar' },
-	{ text: 'universe-loader 0.0.1 · resolving runtime dependencies… done', tone: 'dim' },
-	{ text: 'node-1 starting as MASTER', tone: 'out' },
-	{ text: 'hazelcast cluster “universe-cluster” formed · members: 2 · :6000', tone: 'out' },
-	{ text: 'REST + WebSocket API listening on :7000', tone: 'ok' },
-	{ text: 'instance a1b2c3 (lobby) ONLINE · node-1 · 127.0.0.1:25565', tone: 'ok' },
-	{ text: 'instance d4e5f6 (survival) ONLINE · node-2 · 127.0.0.1:25566', tone: 'ok' }
+	{ prompt: true, text: 'docker compose up -d && docker compose attach universe' },
+	{ glyph: 'arrow', text: 'Starting Universe in MASTER mode' },
+	{ glyph: 'arrow', text: 'Hazelcast advertising 100.64.0.8:6000' },
+	{ glyph: 'arrow', text: 'Registered built-in runtimes (tmux, screen, process)' },
+	{ glyph: 'arrow', text: 'Installing extensions...' },
+	{ glyph: 'ok', text: 'S3 template storage loaded (bucket=templates)' },
+	{ glyph: 'ok', text: 'Docker runtime loaded (image=azul-zulu:21-jdk)' },
+	{ glyph: 'ok', text: 'Kubernetes runtime loaded (namespace=universe)' },
+	{ glyph: 'ok', text: 'Tailscale loaded (ip=100.64.0.8)' },
+	{ glyph: 'ok', text: 'Ktor REST API started on 0.0.0.0:7000' },
+	{ glyph: 'ok', text: "Auto-spawned instance 564574 · config 'game-server-na'" }
 ];
 
 export const CONSOLE_LINES: TermLine[] = [
-	{ prompt: true, text: 'cluster status' },
-	{ text: 'cluster  universe-cluster   members: 2   master: node-1', tone: 'out' },
 	{ prompt: true, text: 'instance list' },
-	{ text: 'a1b2c3  lobby     ONLINE  node-1  127.0.0.1:25565', tone: 'out' },
-	{ text: 'd4e5f6  survival  ONLINE  node-2  127.0.0.1:25566', tone: 'out' },
-	{ prompt: true, text: 'instance execute a1b2c3 "say Universe online"' },
-	{ text: 'dispatched → a1b2c3', tone: 'ok' }
+	{ text: '564574  game-server-na    ONLINE   :25100  docker', tone: 'out' },
+	{ text: '27c625  game-lobby-na     ONLINE   :25000  docker', tone: 'out' },
+	{ text: '2bb48e  proxy-na          ONLINE   :40188  docker', tone: 'out' },
+	{ prompt: true, text: 'cluster status' },
+	{ text: 'universe-cluster · members: 1 · master: na-game-1', tone: 'out' },
+	{ prompt: true, text: "instance execute 27c625 'say Universe online'" },
+	{ glyph: 'ok', text: 'dispatched → 27c625' }
 ];
 
 export type Instance = {
@@ -42,21 +55,58 @@ export type Instance = {
 };
 
 export const PREVIEW_INSTANCES: Instance[] = [
-	{ id: 'a1b2c3', name: 'lobby', state: 'ONLINE', node: 'node-1', host: '127.0.0.1', port: 25565, runtime: 'screen' },
-	{ id: 'd4e5f6', name: 'survival', state: 'ONLINE', node: 'node-2', host: '127.0.0.1', port: 25566, runtime: 'docker' },
-	{ id: 'g7h8i9', name: 'build', state: 'STARTING', node: 'node-3', host: '127.0.0.1', port: 25567, runtime: 'k8s' },
-	{ id: 'j1k2l3', name: 'proxy', state: 'ONLINE', node: 'node-1', host: '127.0.0.1', port: 25577, runtime: 'tmux' }
+	{ id: '564574', name: 'game-server-na', state: 'ONLINE', node: 'na-game-1', host: '100.64.0.8', port: 25100, runtime: 'docker' },
+	{ id: '27c625', name: 'game-lobby-na', state: 'ONLINE', node: 'na-game-1', host: '100.64.0.8', port: 25000, runtime: 'docker' },
+	{ id: '2bb48e', name: 'proxy-na', state: 'ONLINE', node: 'na-game-1', host: '100.64.0.8', port: 40188, runtime: 'docker' },
+	{ id: 'b60372', name: 'anticheat', state: 'ONLINE', node: 'na-game-1', host: '100.64.0.8', port: 4368, runtime: 'docker' },
+	{ id: '12192c', name: 'pubapi', state: 'ONLINE', node: 'na-game-1', host: '100.64.0.8', port: 8087, runtime: 'docker' },
+	{ id: '559415', name: 'game-server-dev', state: 'STARTING', node: 'na-game-1', host: '100.64.0.8', port: 25101, runtime: 'docker' }
 ];
 
 export const FEATURES: [string, string, string][] = [
-	['single-binary', 'no control plane', 'Master and wrapper live in one fat JAR. Node type is a config field, not a different install.'],
-	['clustering', 'hazelcast :6000', 'One master exposes the API and holds cluster state; N wrappers execute instances via task dispatch.'],
-	['templates', 'versioned file trees', 'Per group/name, with built-in and custom %VARIABLES% replaced at deploy.'],
-	['runtimes', 'screen · tmux · docker · k8s', 'Same configuration — swap one field.'],
-	['api', 'REST + WebSocket :7000', 'Everything the console does, over HTTP. Bearer keys with ALL or PUBLIC scopes.'],
-	['log-streaming', 'ws frames', 'Live logs from any instance; interactive cluster console at /api/console.'],
-	['extensions', 'self-registering JARs', 'Drop into ./extensions/ — storage, databases, metrics, networking, chat-ops.'],
-	['gitops', 'argocd export', 'Sync templates from Git; export Kubernetes manifests for ArgoCD tracking.']
+	['clustering', 'master / wrapper', 'One master exposes the REST API; any number of wrapper nodes execute instances. Work is dispatched cluster-wide over Hazelcast — no extra message broker to run.'],
+	['templates', 'versioned file-trees', 'Instances are built from versioned template file-trees with dynamic %VARIABLE% replacement. Compose templates per group, choose one-of, or install whole groups.'],
+	['runtimes', 'screen · tmux · docker · k8s', 'Built-in screen and tmux. Docker and Kubernetes via extensions. The same configuration deploys to a laptop, a VM fleet, or a cluster without changes.'],
+	['api', 'REST + WebSocket :7000', 'Full lifecycle control over HTTP. Stream live logs and an interactive console over WebSockets. Bearer-token auth with ALL / PUBLIC permission scopes and rate limiting.'],
+	['extensions', 'self-registering JARs', 'Self-registering JARs add runtimes, storage backends, databases, metrics exporters, and integrations. Drop one in ./extensions and it wires itself up on load.'],
+	['gitops', 'git + argocd', 'Sync templates and configs straight from Git, and export Kubernetes manifests for ArgoCD to track. Your fleet topology lives in version control.'],
+	['networking', 'tailscale mesh', 'The Tailscale extension exposes mesh IPs as template variables, so instances on different networks connect securely without manual port plumbing.'],
+	['observability', 'prometheus · influxdb', 'Prometheus exposition endpoint out of the box, plus an InfluxDB exporter. Daily-rotated structured logs and a styled operational console.'],
+	['minecraft', 'paper · velocity · folia', 'First-class plugins for Paper, Spigot, Velocity, BungeeCord and Folia. Proxies auto-register backends and route players with pluggable strategies.']
+];
+
+export type StackRow = { key: string; value: string; note?: string };
+export type StackGroup = { heading: string; rows: StackRow[] };
+
+export const STACK: StackGroup[] = [
+	{
+		heading: 'one jar, no external services to run',
+		rows: [
+			{ key: 'runtime', value: 'jvm · single fat jar', note: 'one process runs master + wrappers' },
+			{ key: 'clustering', value: 'hazelcast', note: 'peer-to-peer · unlimited nodes' },
+			{ key: 'api', value: 'rest + websocket', note: ':7000 · bearer auth, rate limited' },
+			{ key: 'templates', value: 'versioned file-trees', note: '%variable% replacement' }
+		]
+	},
+	{
+		heading: 'runtimes · same config, any target',
+		rows: [
+			{ key: 'built-in', value: 'screen · tmux' },
+			{ key: 'extensions', value: 'docker · kubernetes', note: '5+ targets, laptop to fleet' }
+		]
+	},
+	{
+		heading: 'integrations · 14 official drop-in extensions',
+		rows: [
+			{ key: 'storage', value: 'aws s3' },
+			{ key: 'databases', value: 'postgresql · redis · mongodb' },
+			{ key: 'metrics', value: 'prometheus' },
+			{ key: 'networking', value: 'tailscale' },
+			{ key: 'gitops', value: 'argocd' },
+			{ key: 'proxies', value: 'velocity · paper' },
+			{ key: 'chat-ops', value: 'discord' }
+		]
+	}
 ];
 
 export const TEMPLATE_SRC: [string, string][] = [
@@ -86,9 +136,25 @@ export const LICENSED_ROWS: [string, string | boolean][] = [
 	['deployment_help', 'hands-on, from LunarLabs']
 ];
 
+export const EDITION_MATRIX: [string, string | boolean, string | boolean][] = [
+	['master / wrapper clustering', true, true],
+	['template-based deployment', true, true],
+	['built-in runtimes (screen, tmux)', true, true],
+	['docker & kubernetes runtimes', true, true],
+	['REST + WebSocket API', true, true],
+	['official extensions (s3, metrics, dbs)', true, true],
+	['minecraft plugins (paper, velocity)', true, true],
+	['self-host, unlimited nodes', true, true],
+	['community support', true, 'priority'],
+	['web management panel', 'self-host', 'hosted + sso'],
+	['license-key entitlements', false, true],
+	['hardened release channel & slas', false, true],
+	['onboarding & deployment support', false, true]
+];
+
 export const TEMPLATE_VARS: Record<string, string> = {
-	SERVER_PORT: '25565',
-	INSTANCE_NAME: 'lobby',
-	INSTANCE_ID: 'a1b2c3',
-	MAX_MEMORY: '4G'
+	SERVER_PORT: '25100',
+	INSTANCE_NAME: 'game-server-na',
+	INSTANCE_ID: '564574',
+	MAX_MEMORY: '6G'
 };
